@@ -6,11 +6,11 @@
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     color: #1a1a1a;
   }
   h1, h2, h3, h4, h5 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Inter', system-ui, sans-serif;
     letter-spacing: -0.01em;
   }
 }
