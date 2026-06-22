@@ -53,11 +53,11 @@ export default function Navbar() {
           <div className="flex items-center h-16 gap-6">
             {/* Logo */}
             <Link href="/" className="flex-shrink-0">
-              <span className="font-playfair text-2xl font-bold tracking-tight">
+              <span className="font-inter text-2xl font-bold tracking-tight">
                 unbox<span className="text-[#e63329]">arts</span>
               </span>
               <span className="block text-[9px] tracking-[0.2em] text-gray-400 uppercase -mt-1">
-                India's Largest Art Portal
+              India's Largest Art Portal
               </span>
             </Link>
 
