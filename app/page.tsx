@@ -5,7 +5,6 @@ import YouTubeSection from '@/components/home/YouTubeSection';
 import ValueProps from '@/components/home/ValueProps';
 import CategorySection from '@/components/home/CategorySection';
 
-// ─── Mock Data (replace with real DB calls) ───────────────────────────────────
 const curatorsPicks = [
   { id: '1', title: 'Painting Title', artistName: 'Dinkar Jadav', medium: 'Acrylic On Canvas', dimensions: '36"×36"', price: 160000, image: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?w=600&q=80', likes: 123, views: 456, comments: 12, rating: 4.3 },
   { id: '2', title: 'Painting Title', artistName: 'Dinkar Jadav', medium: 'Acrylic On Canvas', dimensions: '36"×36"', price: 160000, image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=600&q=80', likes: 120, views: 389, comments: 9, rating: 4.5 },
