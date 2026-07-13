@@ -1,6 +1,5 @@
 import Link from 'next/link';
-//import { Instagram, Facebook, Youtube, Twitter, Linkedin, Pinterest } from 'lucide-react';//
-import { Instagram, Facebook, Youtube, Twitter, Linkedin} from 'lucide-react';
+import { Instagram, Facebook, Youtube, Twitter, Linkedin, Pinterest } from 'lucide-react';
 
 const footerLinks = [
   {
@@ -163,7 +162,7 @@ export default function Footer() {
             {[
               { Icon: Facebook, href: '#', label: 'Facebook' },
               { Icon: Instagram, href: '#', label: 'Instagram' },
-              //{ Icon: Pinterest, href: '#', label: 'Pinterest' },//
+              { Icon: Pinterest, href: '#', label: 'Pinterest' },
               { Icon: Twitter, href: '#', label: 'Twitter' },
               { Icon: Youtube, href: '#', label: 'YouTube' },
               { Icon: Linkedin, href: '#', label: 'LinkedIn' },

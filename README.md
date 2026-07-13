@@ -140,3 +140,4 @@ Fields: title, slug, coverImage, content, excerpt, author (ref), tags[], isPubli
 
 ---
 
+Built with ❤️ by [DigiBloom.in](https://digibloom.in)

@@ -228,9 +228,9 @@ export default function DashboardPage() {
                 <h2 className="text-base font-semibold text-gray-900">
                   Manage Artworks
                 </h2>
-                <button className="btn-primary flex items-center gap-2 text-xs">
-                  <Plus size={14} /> Add
-                </button>
+                <a href="/dashboard/upload" className="btn-primary flex items-center gap-2 text-xs">
+                  <Plus size={14} /> Add Artwork
+                </a>
               </div>
 
               {/* Filter pills */}

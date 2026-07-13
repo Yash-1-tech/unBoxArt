@@ -1,8 +1,3 @@
-/**
- * MongoDB Seed Script for Unboxarts
- * Run: npx ts-node scripts/seed.ts
- * Or:  node -r ts-node/register scripts/seed.ts
- */
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
@@ -196,7 +191,7 @@ async function seed() {
       code: 'HF-4380001',
       description: 'A meditative exploration of sacred geometry combining the ancient Om symbol with intricate mandala patterns in warm earth tones and gold accents.',
       images: [
-        'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?w=900&q=85',
+        'https://res.cloudinary.com/dgsb9gpsq/image/upload/f_auto,q_auto/Screenshot_2026-06-22_145033_qd4mmw',
         'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=900&q=85',
       ],
       artist: dinkar._id,
