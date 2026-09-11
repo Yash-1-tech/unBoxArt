@@ -9,8 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
-        playfair: ['var(--font-playfair)', 'Georgia', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         brand: {
@@ -18,9 +17,6 @@ const config: Config = {
           dark: '#c02218',
           light: '#fde8e7',
         },
-      },
-      maxWidth: {
-        '8xl': '1280px',
       },
     },
   },

@@ -104,6 +104,7 @@ export default function GalleryPage() {
         </h1>
         <p className="text-sm text-gray-500 leading-relaxed max-w-4xl">
           Discover original paintings and digital prints from independent artists worldwide, all with 0% commission.
+          Every piece comes with an authenticity certificate and free shipping above ₹999.
         </p>
       </div>
 
@@ -167,9 +168,7 @@ export default function GalleryPage() {
             {activeFilters.map((f) => (
               <span key={`${f.key}-${f.value}`} className="flex items-center gap-1 text-[11px] bg-red-50 text-[#e63329] border border-red-200 px-2.5 py-1">
                 {f.value}
-                <button onClick={() => setActiveFilters((prev) => prev.filter((x) => !(x.key === f.key && x.value === f.value)))}>
-                  <X size={10} />
-                </button>
+                <button onClick={() => setActiveFilters((prev) => prev.filter((x) => !(x.key === f.key && x.value === f.value)))}><X size={10} /></button>
               </span>
             ))}
           </div>
@@ -179,13 +178,22 @@ export default function GalleryPage() {
       {error && <p className="text-sm text-red-500 bg-red-50 border border-red-200 px-4 py-3 mb-6">{error}</p>}
 
       {loading && artworks.length === 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+        <div className="columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-[4/5] bg-gray-100 animate-pulse" />
+            <div key={i} className="break-inside-avoid">
+              <div className="bg-gray-100 animate-pulse rounded-sm" style={{ height: `${200 + (i % 3) * 60}px` }} />
+              <div className="pt-2 space-y-1">
+                <div className="h-3 bg-gray-100 animate-pulse rounded w-3/4" />
+                <div className="h-2 bg-gray-100 animate-pulse rounded w-1/2" />
+              </div>
+            </div>
           ))}
         </div>
       ) : artworks.length === 0 ? (
-        <p className="text-center text-gray-400 py-20">No artworks found. Try adjusting filters or check back soon.</p>
+        <div className="text-center py-20">
+          <p className="text-gray-400 mb-4">No artworks found</p>
+          <button onClick={clearFilters} className="text-sm text-[#e63329] hover:underline">Clear all filters</button>
+        </div>
       ) : (
         <>
           <p className="text-xs text-gray-400 mb-4">Showing {artworks.length} of {total} artworks</p>
@@ -215,6 +223,10 @@ export default function GalleryPage() {
                 {loading ? 'Loading...' : 'Load More Artworks'}
               </button>
             </div>
+          )}
+
+          {!hasMore && total > 0 && (
+            <p className="text-center text-xs text-gray-400 mt-10">You've seen all {total} artworks</p>
           )}
         </>
       )}

@@ -20,7 +20,7 @@ export default function HomePage() {
 
       <ArtworkSection
         title="Trendy"
-        viewAllHref="/art-gallery?sort=trending"
+        viewAllHref="/art-gallery?sort=popular"
         collection="trending"
         sort="popular"
         columns={3}

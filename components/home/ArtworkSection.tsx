@@ -21,17 +21,13 @@ interface Artwork {
 interface ArtworkSectionProps {
   title: string;
   viewAllHref: string;
-  collection?: string; // 'curators-picks' | 'featured' | 'trending'
+  collection?: string;
   sort?: string;
   columns?: 3 | 4;
 }
 
 export default function ArtworkSection({
-  title,
-  viewAllHref,
-  collection,
-  sort = 'newest',
-  columns = 3,
+  title, viewAllHref, collection, sort = 'newest', columns = 3,
 }: ArtworkSectionProps) {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +62,7 @@ export default function ArtworkSection({
         {loading ? (
           <div className={`grid ${gridClass} gap-x-5 gap-y-2`}>
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="aspect-[4/5] bg-gray-100 animate-pulse" />
+              <div key={i} className="aspect-[4/5] bg-gray-100 animate-pulse rounded-sm" />
             ))}
           </div>
         ) : (

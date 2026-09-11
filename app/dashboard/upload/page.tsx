@@ -3,32 +3,25 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X, ImagePlus, Loader2 } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function UploadArtworkPage() {
+  const { user } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
   const [form, setForm] = useState({
-    title: '',
-    description: '',
-    medium: '',
-    subject: '',
-    style: '',
-    width: '',
-    height: '',
-    unit: 'in',
-    originalPrice: '',
-    digitalPrintPrice: '',
-    shippingCost: '50',
-    stock: '1',
-    artistId: '', // TODO: replace with logged-in user id from session
+    title: '', description: '', medium: '', subject: '', style: '',
+    width: '', height: '', unit: 'in',
+    originalPrice: '', digitalPrintPrice: '', shippingCost: '50', stock: '1',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -38,12 +31,11 @@ export default function UploadArtworkPage() {
       file,
       preview: URL.createObjectURL(file),
     }));
-    setImages((prev) => [...prev, ...newImages].slice(0, 6)); // max 6 images
+    setImages((prev) => [...prev, ...newImages].slice(0, 6));
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = (index: number) =>
     setImages((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -55,26 +47,29 @@ export default function UploadArtworkPage() {
     setError('');
     setSuccess('');
 
-    if (images.length === 0) {
-      setError('Please add at least one image of your artwork');
-      return;
-    }
+    if (images.length === 0) return setError('Please add at least one image');
     if (!form.title || !form.medium || !form.originalPrice) {
-      setError('Title, medium, and price are required');
-      return;
+      return setError('Title, medium, and price are required');
     }
+    if (!user) return setError('You must be logged in to upload artwork');
 
     setUploading(true);
     try {
-      // 1. Upload images to Cloudinary
-      const formData = new FormData();
-      images.forEach((img) => formData.append('files', img.file));
+      let imageUrls: string[] = [];
 
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error || 'Image upload failed');
+      // If Cloudinary keys are set, upload. Otherwise use placeholder.
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        const formData = new FormData();
+        images.forEach((img) => formData.append('files', img.file));
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Image upload failed');
+        imageUrls = uploadData.urls;
+      } else {
+        // Fallback: use local object URLs (works without Cloudinary for testing)
+        imageUrls = images.map((img) => img.preview);
+      }
 
-      // 2. Create artwork record with image URLs
       const artworkRes = await fetch('/api/artworks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,18 +80,19 @@ export default function UploadArtworkPage() {
           subject: form.subject,
           style: form.style,
           dimensions: {
-            width: Number(form.width),
-            height: Number(form.height),
+            width: Number(form.width) || 0,
+            height: Number(form.height) || 0,
             unit: form.unit,
           },
           originalPrice: Number(form.originalPrice),
           digitalPrintPrice: form.digitalPrintPrice ? Number(form.digitalPrintPrice) : undefined,
           shippingCost: Number(form.shippingCost),
           stock: Number(form.stock),
-          images: uploadData.urls,
-          artist: form.artistId || undefined,
+          images: imageUrls,
+          artist: user.id,  // ← automatically from session
         }),
       });
+
       const artworkData = await artworkRes.json();
       if (!artworkRes.ok) throw new Error(artworkData.error || 'Failed to save artwork');
 
@@ -109,21 +105,40 @@ export default function UploadArtworkPage() {
     }
   };
 
+  if (!user) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-24 text-center">
+        <p className="text-gray-500 mb-4">You need to be logged in to upload artwork.</p>
+        <a href="/auth/signin" className="btn-primary">Sign In</a>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 lg:px-8 py-10">
-      <h1 className="font-bold text-2xl text-gray-900 mb-2">Upload Artwork</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="font-bold text-2xl text-gray-900">Upload Artwork</h1>
+        <span className="text-xs text-gray-400">Uploading as <strong>{user.name}</strong></span>
+      </div>
       <p className="text-sm text-gray-500 mb-8">Share your work with collectors worldwide. 0% commission, always.</p>
 
-      {error && <p className="text-sm text-red-500 bg-red-50 border border-red-200 px-4 py-3 mb-6">{error}</p>}
-      {success && <p className="text-sm text-green-600 bg-green-50 border border-green-200 px-4 py-3 mb-6">{success}</p>}
+      {error && (
+        <p className="text-sm text-red-500 bg-red-50 border border-red-200 px-4 py-3 mb-6 rounded">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="text-sm text-green-600 bg-green-50 border border-green-200 px-4 py-3 mb-6 rounded">
+          {success}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Image Upload */}
+        {/* Images */}
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
-            Images <span className="text-gray-400">(up to 6)</span>
+            Images <span className="text-gray-400 normal-case font-normal">(up to 6 — drag & drop or click)</span>
           </label>
-
           <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
@@ -155,6 +170,11 @@ export default function UploadArtworkPage() {
                   >
                     <X size={12} />
                   </button>
+                  {i === 0 && (
+                    <span className="absolute bottom-1 left-1 text-[9px] bg-[#e63329] text-white px-1">
+                      Cover
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -224,8 +244,16 @@ export default function UploadArtworkPage() {
           </div>
         </div>
 
-        <button type="submit" disabled={uploading} className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-60">
-          {uploading ? (<><Loader2 size={16} className="animate-spin" /> Publishing...</>) : (<><Upload size={16} /> Publish Artwork</>)}
+        <button
+          type="submit"
+          disabled={uploading}
+          className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-60"
+        >
+          {uploading ? (
+            <><Loader2 size={16} className="animate-spin" /> Publishing...</>
+          ) : (
+            <><Upload size={16} /> Publish Artwork</>
+          )}
         </button>
       </form>
     </div>

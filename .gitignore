@@ -1,11 +1,36 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
 .next/
+out/
+
+# Environment variables — NEVER commit these
+.env
 .env.local
-.env*.local
-*.log
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
-final.py
+*.pem
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Ignore internal file
 write_files.py
-final.py
-write_files.py
-crud1.py
+.env.local

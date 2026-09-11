@@ -70,23 +70,14 @@ const OrderSchema = new Schema<IOrder>(
     discount: { type: Number, default: 0 },
     total: { type: Number, required: true },
     paymentMethod: { type: String, required: true },
-    paymentStatus: {
-      type: String,
-      enum: ['pending', 'paid', 'failed', 'refunded'],
-      default: 'pending',
-    },
+    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     paymentReference: String,
-    orderStatus: {
-      type: String,
-      enum: ['placed', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'],
-      default: 'placed',
-    },
+    orderStatus: { type: String, enum: ['placed', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'], default: 'placed' },
     trackingNumber: String,
     notes: String,
   },
   { timestamps: true }
 );
-
 
 OrderSchema.pre('save', async function (next) {
   if (!this.orderNumber) {

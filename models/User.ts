@@ -43,11 +43,7 @@ const UserSchema = new Schema<IUser>(
       youtube: String,
       website: String,
     },
-    membershipTier: {
-      type: String,
-      enum: ['free', 'silver', 'gold', 'platinum'],
-      default: 'free',
-    },
+    membershipTier: { type: String, enum: ['free', 'silver', 'gold', 'platinum'], default: 'free' },
     wishlist: [{ type: Schema.Types.ObjectId, ref: 'Artwork' }],
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],

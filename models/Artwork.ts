@@ -17,11 +17,7 @@ export interface IArtwork extends Document {
   subject?: string;
   style?: string;
   color?: string[];
-  dimensions: {
-    width: number;
-    height: number;
-    unit: 'in' | 'cm';
-  };
+  dimensions: { width: number; height: number; unit: 'in' | 'cm' };
   originalPrice: number;
   digitalPrintPrice?: number;
   shippingCost: number;
@@ -54,7 +50,7 @@ const ArtworkSchema = new Schema<IArtwork>(
     code: { type: String, required: true, unique: true, uppercase: true },
     description: { type: String },
     images: [{ type: String, required: true }],
-    artist: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    artist: { type: Schema.Types.ObjectId, ref: 'User', required: false },
     medium: { type: String, required: true },
     subject: { type: String },
     style: { type: String },
