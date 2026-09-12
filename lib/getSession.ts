@@ -4,5 +4,5 @@ import { sessionOptions, type SessionData } from './session';
 
 export async function getSession(): Promise<ReturnType<typeof getIronSession<SessionData>>> {
   const cookieStore = cookies();
-  return getIronSession<SessionData>(cookieStore, sessionOptions);
+  return getIronSession<SessionData>(await cookieStore, sessionOptions);
 }
