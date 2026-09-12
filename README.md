@@ -104,6 +104,66 @@ Here's everything added in this conversation, from first message to now:
 
 ## What's still to do
 
+### Hardcoded to api req
+Right now the site shows **mock/hardcoded data** because the pages that show artists and blog listings use static arrays defined directly in the component files — not from MongoDB. Only the gallery page (`/art-gallery`) actually calls the API.
+
+Here's exactly what's hardcoded vs what's live:
+
+---
+
+## What's hardcoded (showing fake data)
+
+| Page | What's fake | Where it is |
+|------|-------------|-------------|
+| `FeaturedArtists` component | 7 hardcoded artists array | `components/home/FeaturedArtists.tsx` line ~8 |
+| `YouTubeSection` component | 3 hardcoded videos | `components/home/YouTubeSection.tsx` |
+| `CategorySection` component | 6 hardcoded categories | `components/home/CategorySection.tsx` |
+| `app/artists/page.tsx` | 30 generated fake artists | line ~10, `const ARTISTS = Array.from(...)` |
+| `app/artists/[id]/page.tsx` | 1 hardcoded artist + 16 artworks | `const ARTIST = {...}` and `const ARTWORKS = Array.from(...)` |
+| `app/blog/page.tsx` | 9 hardcoded blogs | `const BLOGS = Array.from(...)` |
+| `app/dashboard/page.tsx` | 3 hardcoded artworks in Manage Artworks | `const SAMPLE_ARTWORKS = [...]` |
+| `app/cart/page.tsx` | 2 hardcoded cart items | `const SAMPLE_CART = [...]` (was replaced by CartContext but fallback exists) |
+
+## What's already live (pulling from MongoDB)
+
+| Page | What's live |
+|------|-------------|
+| `/art-gallery` | Real artworks from MongoDB via `/api/artworks` |
+| `/artwork/[id]` | Real single artwork from MongoDB |
+| `ArtworkSection` (home page sections) | Real artworks from MongoDB |
+| `/dashboard/upload` | Saves real artwork to MongoDB |
+| `/auth/signup` + `/auth/signin` | Real users in MongoDB |
+| `/cart` + `/checkout` | Real orders saved to MongoDB |
+| `/orders` | Real orders from MongoDB |
+| `/wishlist` | Real wishlist from MongoDB |
+| `/api/search` | Real search from MongoDB |
+
+---
+
+## Why it's like this
+
+When we built the artist pages and blog listing, we used hardcoded arrays as placeholders because the focus was on auth, cart, payments, and upload first. The API routes for these already exist — the pages just aren't calling them yet.
+
+---
+
+## Fix it — replace all hardcoded data with real API calls
+
+This is one focused session. Here's the plan:
+
+**FeaturedArtists** — fetch from `/api/users?role=artist&limit=7`
+
+**Artists directory** — fetch from `/api/users?role=artist`
+
+**Artist profile page** — fetch from `/api/users/[id]`
+
+**Blog listing** — fetch from `/api/blogs`
+
+**Dashboard artworks** — fetch from `/api/artworks?artist=[userId]`
+
+Want me to do all of these now in one go? I'll rewrite each file to pull real data from MongoDB and regenerate `write_files.py` at the end. Just say go.
+
+###features
+
 | Priority | Feature |
 |----------|---------|
 | 🔴 High | Auth sessions — login doesn't persist between pages yet |
