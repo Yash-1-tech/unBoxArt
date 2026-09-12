@@ -2,11 +2,14 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import { AuthProvider } from '@/lib/AuthContext';
+import { CartProvider } from '@/lib/CartContext';
 
 export const metadata: Metadata = {
   title: 'Unboxarts — Buy & Sell Art with 0% Commission',
   description:
     'Discover and collect original paintings and digital prints from independent artists worldwide. 0% commission, free shipping, authenticity guaranteed.',
+  keywords: ['art marketplace', 'buy paintings', 'sell art', 'original art', 'digital prints'],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,9 +24,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans bg-white text-gray-900 antialiased">
-        <Navbar />
-        <main className="min-h-screen">{children}</main>
-        <Footer />
+        <AuthProvider>
+          <CartProvider>
+            <Navbar />
+            <main className="min-h-screen">{children}</main>
+            <Footer />
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );

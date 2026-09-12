@@ -15,28 +15,15 @@ export default function CategorySection() {
       <div className="max-w-[1280px] mx-auto px-4 lg:px-8">
         <div className="section-header">
           <h2 className="section-title">By Categories</h2>
-          <Link href="/art-gallery" className="view-all-link">
-            View All &rsaquo;
-          </Link>
+          <Link href="/art-gallery" className="view-all-link">View All &rsaquo;</Link>
         </div>
-
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {categories.map((cat) => (
-            <Link
-              key={cat.label}
-              href={cat.href}
-              className="group block text-center"
-            >
+            <Link key={cat.label} href={cat.href} className="group block text-center">
               <div className="aspect-square overflow-hidden bg-gray-100 mb-2">
-                <img
-                  src={cat.image}
-                  alt={cat.label}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                <img src={cat.image} alt={cat.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
               </div>
-              <p className="text-xs font-medium text-gray-700 group-hover:text-[#e63329] transition-colors">
-                {cat.label}
-              </p>
+              <p className="text-xs font-medium text-gray-700 group-hover:text-[#e63329] transition-colors">{cat.label}</p>
             </Link>
           ))}
         </div>

@@ -2,19 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Artwork from '@/models/Artwork';
 
-// GET /api/artworks — list with filters & pagination
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
-
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '12');
     const skip = (page - 1) * limit;
 
-    // Build query
     const query: Record<string, unknown> = { isAvailable: true };
-
     const medium = searchParams.get('medium');
     const subject = searchParams.get('subject');
     const style = searchParams.get('style');
@@ -31,14 +27,17 @@ export async function GET(req: NextRequest) {
     if (collection === 'curators-picks') query.isCuratorsPick = true;
     if (collection === 'featured') query.isFeatured = true;
     if (collection === 'trending') query.isTrending = true;
-    if (q) query.$text = { $search: q };
+    if (q) query.$or = [
+      { title: { $regex: q, $options: 'i' } },
+      { medium: { $regex: q, $options: 'i' } },
+      { subject: { $regex: q, $options: 'i' } },
+    ];
     if (minPrice || maxPrice) {
       query.originalPrice = {};
       if (minPrice) (query.originalPrice as Record<string, number>).$gte = parseInt(minPrice);
       if (maxPrice) (query.originalPrice as Record<string, number>).$lte = parseInt(maxPrice);
     }
 
-    // Sort
     const sortParam = searchParams.get('sort') || 'newest';
     const sortMap: Record<string, Record<string, number>> = {
       newest: { createdAt: -1 },
@@ -73,16 +72,12 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/artworks — create new artwork
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
     const body = await req.json();
-
-    // Generate unique code
     const count = await Artwork.countDocuments();
     body.code = `HF-${Date.now()}-${String(count + 1).padStart(4, '0')}`;
-
     const artwork = await Artwork.create(body);
     return NextResponse.json(artwork, { status: 201 });
   } catch (err: unknown) {

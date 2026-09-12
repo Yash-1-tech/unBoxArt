@@ -30,16 +30,16 @@ export default function ArtistsPage() {
 
   return (
     <div>
-      {/* Page Intro Banner */}
       <div className="bg-gray-50 border-b border-gray-100 py-10 px-4">
         <div className="max-w-[1280px] mx-auto">
           <nav className="text-xs text-gray-400 mb-4 flex items-center gap-1.5">
             <Link href="/" className="hover:text-[#e63329]">Home</Link>
             <span>/</span>
-            <span className="text-gray-600">Artist Page</span>
+            <span className="text-gray-600">Artists</span>
           </nav>
+          <h1 className="text-2xl font-bold text-gray-900 uppercase mb-3">Artist Page</h1>
           <p className="text-xs text-gray-500 leading-relaxed max-w-4xl">
-            Explore the best loved art of all time. Limited by those highly recognizable modern art masters. Explore the best loved art of all time, created by those highly recognizable modern art maestros. Explore the best loved art of all time, created by those highly recognizable modern art maestros. Explore the best loved art of all time, created by those highly recognizable modern art maestros.
+            Explore the best loved art of all time. Created by highly recognizable modern art maestros from across India and around the world.
           </p>
         </div>
       </div>
@@ -47,7 +47,6 @@ export default function ArtistsPage() {
       <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-8">
         {/* A–Z Filter + Search */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-          {/* Alphabet */}
           <div className="flex flex-wrap gap-0 text-xs font-semibold">
             <button
               onClick={() => setActiveLetter('')}
@@ -59,39 +58,25 @@ export default function ArtistsPage() {
               <button
                 key={letter}
                 onClick={() => setActiveLetter(activeLetter === letter ? '' : letter)}
-                className={`px-1.5 py-1 border-r border-gray-200 last:border-r-0 hover:text-[#e63329] transition-colors ${
-                  activeLetter === letter ? 'text-[#e63329] underline' : 'text-gray-500'
-                }`}
+                className={`px-1.5 py-1 border-r border-gray-200 last:border-r-0 hover:text-[#e63329] transition-colors ${activeLetter === letter ? 'text-[#e63329] underline' : 'text-gray-500'}`}
               >
                 {letter}
               </button>
             ))}
           </div>
 
-          {/* Sort & Search */}
           <div className="flex items-center gap-2 ml-auto">
             <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="text-xs border border-gray-200 px-3 py-2 pr-7 appearance-none focus:outline-none focus:border-[#e63329]"
-              >
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-xs border border-gray-200 px-3 py-2 pr-7 appearance-none focus:outline-none focus:border-[#e63329]">
                 <option value="newest">Newest</option>
                 <option value="popular">Most Popular</option>
                 <option value="az">A–Z</option>
               </select>
               <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
             </div>
-
             <div className="flex items-center border border-gray-200 px-3 py-2 gap-2">
               <Search size={13} className="text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by Name"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="text-xs outline-none w-32 placeholder:text-gray-400"
-              />
+              <input type="text" placeholder="Search by Name" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="text-xs outline-none w-32 placeholder:text-gray-400" />
             </div>
           </div>
         </div>
@@ -99,19 +84,16 @@ export default function ArtistsPage() {
         {/* Artist Grid */}
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4 lg:gap-6 mb-12">
           {filteredArtists.map((artist) => (
-            <Link
-              key={artist.id}
-              href={`/artists/${artist.id}`}
-              className="group text-center"
-            >
+            <Link key={artist.id} href={`/artists/${artist.id}`} className="group text-center">
               <div className="aspect-square overflow-hidden bg-gray-100 mb-2">
                 <img
                   src={artist.image}
                   alt={artist.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
-              <p className="text-[11px] font-semibold text-gray-900 leading-snug line-clamp-1">
+              <p className="text-[11px] font-semibold text-gray-900 leading-snug" style={{ overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
                 {artist.name} | {artist.location}
               </p>
               <div className="flex items-center justify-center gap-1 mt-1">
@@ -121,22 +103,18 @@ export default function ArtistsPage() {
                   </svg>
                 ))}
                 <span className="text-[9px] text-gray-400">{artist.rating}</span>
-                <span className="text-[9px] text-gray-400 ml-1">{artist.views}</span>
-                <span className="text-[9px] text-gray-400">{artist.sales}</span>
               </div>
             </Link>
           ))}
         </div>
 
-        {/* Pagination */}
+        {filteredArtists.length === 0 && (
+          <p className="text-center text-gray-400 py-16">No artists found matching your search.</p>
+        )}
+
         <div className="flex justify-center gap-1.5 mt-4">
           {[1, 2, 3, 4, 5].map((p) => (
-            <button
-              key={p}
-              className={`w-7 h-7 text-xs border transition-colors ${
-                p === 1 ? 'border-[#e63329] text-[#e63329]' : 'border-gray-200 text-gray-500 hover:border-gray-400'
-              }`}
-            >
+            <button key={p} className={`w-7 h-7 text-xs border transition-colors ${p === 1 ? 'border-[#e63329] text-[#e63329]' : 'border-gray-200 text-gray-500 hover:border-gray-400'}`}>
               {p}
             </button>
           ))}

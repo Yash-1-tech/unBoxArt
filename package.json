@@ -9,14 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "^14.2.0",
+    "next": "^16.2.9",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "mongoose": "^8.3.0",
     "lucide-react": "^0.383.0",
-    "next-auth": "^4.24.7",
     "bcryptjs": "^2.4.3",
-    "clsx": "^2.1.1"
+    "cloudinary": "^2.3.0",
+    "iron-session": "^8.0.1",
+    "clsx": "^2.1.1",
+    "razorpay": "^2.9.2",
+    "next-auth": "^4.24.7",
+    "resend": "^3.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

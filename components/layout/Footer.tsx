@@ -1,6 +1,13 @@
 import Link from 'next/link';
-//import { Instagram, Facebook, Youtube, Twitter, Linkedin, Pinterest } from 'lucide-react';//
-import { Instagram, Facebook, Youtube, Twitter, Linkedin} from 'lucide-react';
+import { Instagram, Facebook, Youtube, Twitter, Linkedin } from 'lucide-react';
+
+function PinterestIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2C6.477 2 2 6.477 2 12c0 4.236 2.636 7.855 6.356 9.312-.088-.791-.167-2.005.035-2.868.181-.78 1.172-4.97 1.172-4.97s-.299-.598-.299-1.482c0-1.388.806-2.428 1.808-2.428.852 0 1.265.64 1.265 1.408 0 .858-.546 2.141-.828 3.33-.236.995.499 1.806 1.476 1.806 1.772 0 3.137-1.868 3.137-4.564 0-2.387-1.715-4.057-4.164-4.057-2.837 0-4.5 2.126-4.5 4.322 0 .856.33 1.772.741 2.272a.3.3 0 0 1 .069.286c-.076.314-.244.995-.277 1.134-.044.183-.146.222-.336.134-1.249-.581-2.03-2.407-2.03-3.874 0-3.154 2.292-6.052 6.608-6.052 3.469 0 6.165 2.473 6.165 5.776 0 3.447-2.173 6.22-5.19 6.22-1.013 0-1.966-.527-2.292-1.148l-.623 2.378c-.226.869-.835 1.958-1.244 2.621.937.29 1.931.446 2.962.446 5.523 0 10-4.477 10-10S17.523 2 12 2z" />
+    </svg>
+  );
+}
 
 const footerLinks = [
   {
@@ -10,7 +17,7 @@ const footerLinks = [
       { label: 'Buyer FAQ', href: '#' },
       { label: 'Return Policy', href: '#' },
       { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
+      { label: "Curator's Circle", href: '#' },
       { label: 'Catalog', href: '#' },
       { label: 'Commissions', href: '#' },
     ],
@@ -22,80 +29,71 @@ const footerLinks = [
       { label: 'Listed Artist', href: '#' },
       { label: 'Return Policy', href: '#' },
       { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
+      { label: "Curator's Circle", href: '#' },
       { label: 'Catalog', href: '#' },
       { label: 'Commissions', href: '#' },
     ],
   },
   {
-    heading: 'For Artist',
+    heading: 'Discover',
     links: [
-      { label: 'Why Sell', href: '#' },
-      { label: 'Listed Artist', href: '#' },
-      { label: 'Return Policy', href: '#' },
-      { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
-      { label: 'Catalog', href: '#' },
-      { label: 'Commissions', href: '#' },
+      { label: 'Abstract Art', href: '/art-gallery?style=abstract' },
+      { label: 'Landscapes', href: '/art-gallery?subject=landscape' },
+      { label: 'Portraits', href: '/art-gallery?subject=portrait' },
+      { label: 'Watercolor', href: '/art-gallery?medium=watercolor' },
+      { label: 'Oil Paintings', href: '/art-gallery?medium=oil' },
+      { label: 'Digital Prints', href: '/art-gallery?medium=digital' },
+      { label: 'Affordable', href: '/art-gallery?sort=price-asc' },
     ],
   },
   {
-    heading: 'For Artist',
+    heading: 'Artists',
     links: [
-      { label: 'Why Sell', href: '#' },
-      { label: 'Listed Artist', href: '#' },
-      { label: 'Return Policy', href: '#' },
+      { label: 'All Artists', href: '/artists' },
+      { label: 'Featured Artists', href: '/artists?filter=featured' },
+      { label: 'Indian Artists', href: '/artists?location=india' },
+      { label: 'Sell Your Art', href: '/dashboard/upload' },
+      { label: 'Artist FAQ', href: '#' },
+      { label: 'Pricing Plans', href: '/dashboard#plans' },
       { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
-      { label: 'Catalog', href: '#' },
-      { label: 'Commissions', href: '#' },
     ],
   },
   {
-    heading: 'For Artist',
+    heading: 'Company',
     links: [
-      { label: 'Why Sell', href: '#' },
-      { label: 'Listed Artist', href: '#' },
-      { label: 'Return Policy', href: '#' },
-      { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
-      { label: 'Catalog', href: '#' },
-      { label: 'Commissions', href: '#' },
+      { label: 'About Us', href: '#' },
+      { label: 'Blog', href: '/blog' },
+      { label: 'Contact', href: '/contact' },
+      { label: 'Press', href: '#' },
+      { label: 'Careers', href: '#' },
+      { label: 'Partners', href: '#' },
+      { label: 'Sitemap', href: '#' },
     ],
   },
   {
-    heading: 'For Artist',
+    heading: 'Support',
     links: [
-      { label: 'Why Sell', href: '#' },
-      { label: 'Listed Artist', href: '#' },
-      { label: 'Return Policy', href: '#' },
-      { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
-      { label: 'Catalog', href: '#' },
-      { label: 'Commissions', href: '#' },
+      { label: 'Help Center', href: '#' },
+      { label: 'Shipping Info', href: '#' },
+      { label: 'Returns', href: '#' },
+      { label: 'Track Order', href: '#' },
+      { label: 'Size Guide', href: '#' },
+      { label: 'Care Guide', href: '#' },
+      { label: 'Contact Us', href: '/contact' },
     ],
   },
   {
-    heading: 'For Artist',
+    heading: 'Legal',
     links: [
-      { label: 'Why Sell', href: '#' },
-      { label: 'Latest Artist', href: '#' },
-      { label: 'Return Policy', href: '#' },
-      { label: 'Testimonials', href: '#' },
-      { label: 'Curator\'s Circle', href: '#' },
-      { label: 'Catalog', href: '#' },
+      { label: 'Terms & Conditions', href: '#' },
+      { label: 'Privacy Policy', href: '#' },
+      { label: 'Refund Policy', href: '#' },
+      { label: 'Cookie Policy', href: '#' },
+      { label: 'Dropshipping', href: '#' },
       { label: 'Commissions', href: '#' },
+      { label: 'Authenticity', href: '#' },
     ],
   },
-];
-
-const paymentMethods = [
-  { name: 'Stripe', logo: 'stripe' },
-  { name: 'PayPal', logo: 'paypal' },
-  { name: 'Visa', logo: 'visa' },
-  { name: 'American Express', logo: 'amex' },
-  { name: 'Maestro', logo: 'maestro' },
-  { name: 'UPI', logo: 'upi' },
 ];
 
 const instagramPhotos = Array.from({ length: 6 }, (_, i) => ({
@@ -119,7 +117,9 @@ export default function Footer() {
               <span className="text-blue-600">P</span> PayPal
             </span>
             <span className="text-blue-700 font-bold text-2xl italic tracking-wider">VISA</span>
-            <span className="text-blue-900 font-bold text-lg tracking-wider">AMERICAN<br/>EXPRESS</span>
+            <span className="text-blue-900 font-bold text-lg tracking-wider leading-tight text-center">
+              AMERICAN<br />EXPRESS
+            </span>
             <span className="text-red-600 font-bold text-lg">Maestro</span>
             <span className="text-orange-500 font-bold text-xl">UPI▶</span>
           </div>
@@ -159,11 +159,11 @@ export default function Footer() {
           <p className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-500 mb-5">
             Follow Us
           </p>
-          <div className="flex items-center justify-center gap-6">
+          <div className="flex items-center justify-center gap-4">
             {[
               { Icon: Facebook, href: '#', label: 'Facebook' },
               { Icon: Instagram, href: '#', label: 'Instagram' },
-              //{ Icon: Pinterest, href: '#', label: 'Pinterest' },//
+              { Icon: PinterestIcon, href: '#', label: 'Pinterest' },
               { Icon: Twitter, href: '#', label: 'Twitter' },
               { Icon: Youtube, href: '#', label: 'YouTube' },
               { Icon: Linkedin, href: '#', label: 'LinkedIn' },
@@ -174,7 +174,7 @@ export default function Footer() {
                 aria-label={label}
                 className="w-9 h-9 border border-gray-200 flex items-center justify-center hover:border-[#e63329] hover:text-[#e63329] transition-colors"
               >
-                <Icon size={16} />
+                <Icon />
               </a>
             ))}
           </div>
@@ -211,15 +211,15 @@ export default function Footer() {
       {/* Bottom Bar */}
       <div className="border-t border-gray-100 py-5">
         <div className="max-w-[1280px] mx-auto px-4 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-4 text-[11px] text-gray-400">
-            <Link href="/terms" className="hover:text-[#e63329] transition-colors">Terms & Conditions</Link>
-            <Link href="/refund" className="hover:text-[#e63329] transition-colors">Refund</Link>
-            <Link href="/privacy" className="hover:text-[#e63329] transition-colors">Privacy Policy</Link>
-            <Link href="/faq" className="hover:text-[#e63329] transition-colors">FAQ</Link>
-            <Link href="/dropshipping" className="hover:text-[#e63329] transition-colors">Dropshipping</Link>
+          <div className="flex items-center gap-4 text-[11px] text-gray-400 flex-wrap">
+            <Link href="#" className="hover:text-[#e63329] transition-colors">Terms & Conditions</Link>
+            <Link href="#" className="hover:text-[#e63329] transition-colors">Refund</Link>
+            <Link href="#" className="hover:text-[#e63329] transition-colors">Privacy Policy</Link>
+            <Link href="#" className="hover:text-[#e63329] transition-colors">FAQ</Link>
+            <Link href="#" className="hover:text-[#e63329] transition-colors">Dropshipping</Link>
           </div>
           <p className="text-[11px] text-gray-400">
-            © 2025 Unboxarts. All rights reserved. Powered by{' '}
+            © {new Date().getFullYear()} Unboxarts. All rights reserved. Powered by{' '}
             <a href="#" className="text-[#e63329]">DigiBloom.in</a>
           </p>
         </div>
