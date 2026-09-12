@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Search, User, ShoppingCart, Menu, X, ChevronDown,
   Heart, LogOut, Settings, Package, LayoutDashboard, Upload,
-  Loader2,
+  Loader2,Edit2
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useCart } from '@/lib/CartContext';
