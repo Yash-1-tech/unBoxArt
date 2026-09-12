@@ -34,3 +34,6 @@ next-env.d.ts
 # Ignore internal file
 write_files.py
 .env.local
+
+.gitignore
+.env.example
