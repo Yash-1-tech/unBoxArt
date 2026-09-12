@@ -13,130 +13,109 @@ India's largest art portal. Buy and sell original paintings and digital prints w
 
 ---
 
-## Project Structure
-
-```
-unboxarts/
-├── app/
-│   ├── layout.tsx              # Global layout (Navbar + Footer)
-│   ├── page.tsx                # Home page
-│   ├── globals.css             # Global styles + design tokens
-│   ├── art-gallery/
-│   │   └── page.tsx            # Gallery/Listing page with filters
-│   ├── artwork/[id]/
-│   │   └── page.tsx            # Product details page
-│   ├── artists/
-│   │   ├── page.tsx            # Artists directory (A-Z)
-│   │   └── [id]/page.tsx       # Artist profile + portfolio
-│   ├── blog/
-│   │   └── page.tsx            # Blog listing
-│   ├── dashboard/
-│   │   └── page.tsx            # Buyer/Artist dashboard
-│   ├── auth/
-│   │   ├── signin/page.tsx     # Sign In
-│   │   └── signup/page.tsx     # Sign Up
-│   └── contact/
-│       └── page.tsx            # Contact page
-├── components/
-│   ├── layout/
-│   │   ├── Navbar.tsx          # Sticky nav with mega-menu + search
-│   │   └── Footer.tsx          # Multi-column footer
-│   ├── home/
-│   │   ├── HeroCarousel.tsx    # Auto-playing hero slider
-│   │   ├── FeaturedArtists.tsx # Horizontal artist carousel
-│   │   ├── ArtworkSection.tsx  # Reusable section grid
-│   │   ├── YouTubeSection.tsx  # YouTube video cards
-│   │   ├── CategorySection.tsx # Browse by category
-│   │   └── ValueProps.tsx      # Trust signals row
-│   └── ui/
-│       └── ArtworkCard.tsx     # Reusable artwork card
-├── models/
-│   ├── User.ts                 # Mongoose User schema
-│   ├── Artwork.ts              # Mongoose Artwork schema
-│   └── Blog.ts                 # Mongoose Blog schema
-├── lib/
-│   └── db.ts                   # MongoDB connection utility
-├── tailwind.config.ts
-├── next.config.js
-├── tsconfig.json
-└── .env.example
-```
+Here's everything added in this conversation, from first message to now:
 
 ---
 
-## Quick Start
+## Project built from scratch
 
-### 1. Clone & Install
+### Foundation
+- Full Next.js 14 project with App Router, TypeScript, Tailwind CSS
+- MongoDB connection utility with hot-reload caching
+- 4 Mongoose models — User, Artwork, Blog, Order
+- Global layout with Navbar and Footer
+- Design system — Inter font, brand red `#e63329`, all utility classes
 
-```bash
-git clone <repo-url>
-cd unboxarts
-npm install
-```
+### Pages built (10 total)
+| Page | Route |
+|------|-------|
+| Home | `/` |
+| Art Gallery | `/art-gallery` |
+| Artwork Detail | `/artwork/[id]` |
+| Artists Directory | `/artists` |
+| Artist Profile | `/artists/[id]` |
+| Sign In | `/auth/signin` |
+| Sign Up | `/auth/signup` |
+| Dashboard | `/dashboard` |
+| Blog | `/blog` |
+| Contact | `/contact` |
 
-### 2. Environment Setup
+### API routes (15 total)
+- `POST /api/auth/register` — create account with bcrypt
+- `POST /api/auth/login` — validate credentials
+- `GET/POST /api/artworks` — list with filters, create
+- `GET/PATCH/DELETE /api/artworks/[id]` — single artwork CRUD
+- `POST /api/artworks/[id]/like` — like counter
+- `POST /api/artworks/[id]/reviews` — add review
+- `GET /api/users` — list artists
+- `GET/PATCH /api/users/[id]` — profile + artworks
+- `GET/POST /api/users/[id]/wishlist` — toggle wishlist
+- `GET/POST /api/blogs` — list and create
+- `GET /api/blogs/[slug]` — single post
+- `GET/POST /api/orders` — order list and creation
+- `POST /api/upload` — Cloudinary image upload
 
-```bash
-cp .env.example .env.local
-# Fill in your credentials
-```
+### Components
+- `Navbar` — sticky, mega menu, search overlay, mobile menu
+- `Footer` — payment logos, Instagram grid, follow icons, 7-column links
+- `HeroCarousel` — auto-playing with dots and arrows
+- `FeaturedArtists` — horizontal scroll with ratings
+- `ArtworkSection` — self-fetching, used for all homepage sections
+- `ArtworkCard` — with image error fallback emoji placeholder
+- `ValueProps` — 4 trust signals
+- `YouTubeSection` — video thumbnail cards
+- `CategorySection` — browse by category grid
 
-### 3. Run Dev Server
+### New pages added mid-conversation
+- `/cart` — remove items, order summary, proceed to checkout
+- `/checkout` — address form, payment method selector
+- `/dashboard/upload` — Pinterest-style drag and drop image upload form
 
-```bash
-npm run dev
-# Open http://localhost:3000
-```
-
----
-
-## Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Home with hero, featured artists, curators picks, trendy, affordable, YouTube |
-| `/art-gallery` | Masonry grid gallery with filter toolbar |
-| `/artwork/[id]` | Product detail with image zoom, checkout, recommendations |
-| `/artists` | A-Z artist directory with 6-col grid |
-| `/artists/[id]` | Artist profile with bio and masonry portfolio |
-| `/blog` | Blog listing in 3-col grid |
-| `/dashboard` | Full buyer/artist dashboard with sidebar |
-| `/auth/signin` | Sign in modal/page |
-| `/auth/signup` | Sign up modal/page |
-| `/contact` | Contact page |
-
----
-
-## Design System
-
-- **Primary Color:** `#e63329` (Unboxarts Red)
-- **Fonts:** Playfair Display (headings) + DM Sans (body)
-- **Aesthetic:** Clean white minimalist — artwork takes center stage
-- **Grid:** CSS columns (masonry) for organic gallery feel
-
----
-
-## Database Models
-
-### User
-Fields: name, email, password, role (artist|buyer), profileImage, bio, location, socialLinks, membershipTier (free|silver|gold|platinum), wishlist, followers, following, rating, isVerified
-
-### Artwork
-Fields: title, code, description, images[], artist (ref), medium, subject, style, color[], dimensions, originalPrice, digitalPrintPrice, shippingCost, stock, isAvailable, isFeatured, isCuratorsPick, isTrending, likes, views, reviews[], avgRating
-
-### Blog
-Fields: title, slug, coverImage, content, excerpt, author (ref), tags[], isPublished, views
+### Database
+- Full seed script with 4 artists, 9 artworks, 6 blogs, test accounts
 
 ---
 
-## Membership Plans
+## Bugs fixed during the session
 
-| Plan | Price | Artworks |
-|------|-------|----------|
-| Free | ₹0/mo | Up to 10 |
-| Silver | ₹25/mo | Up to 50 |
-| Gold | ₹59/mo | Up to 100 + Advanced Analytics |
-| Platinum | ₹125/mo | Unlimited + Expert Consultation |
+| Error | Fix |
+|-------|-----|
+| Next.js 9 installed | Upgraded to 14.2.0 |
+| `pages` directory not found | Project structure was flat, Python script rebuilt it |
+| `@apply group` CSS error | Removed `group` from `@apply` |
+| `Export Pinterest doesn't exist` | Removed Pinterest from lucide import, replaced with inline SVG |
+| `nextConfig is not defined` | Rewrote next.config.js after terminal corruption |
+| MongoDB IP whitelist error | Set Atlas to allow `0.0.0.0/0` for Codespace |
+| Git history 628MB bloat | Deleted `.git`, reinitialised clean repo, pushed 169KB |
+| Font not loading | Replaced `next/font/google` with standard `<link>` tag |
+| `globals.css @apply group` error | Cleaned up all invalid `@apply` directives |
+
+---
+
+## Infrastructure
+
+- `.gitignore` — correctly excludes `.next`, `node_modules`, `.env.local`
+- `.env.example` — all variables documented
+- `.devcontainer/devcontainer.json` — auto `npm install` for new Codespace contributors
+- `DOCUMENTATION.md` — 659 lines covering every route, model, deployment, and integration guide
+- `write_files.py` — portable script to rebuild entire project structure from scratch
+
+---
+
+## What's still to do
+
+| Priority | Feature |
+|----------|---------|
+| 🔴 High | Auth sessions — login doesn't persist between pages yet |
+| 🔴 High | Route protection — dashboard accessible without login |
+| 🔴 High | Payment gateway — Razorpay or Stripe |
+| 🟡 Medium | Cart state — connect Add to Cart button to cart page |
+| 🟡 Medium | Checkout submits real order to MongoDB |
+| 🟡 Medium | Seller order dashboard |
+| 🟢 Low | Google OAuth end-to-end |
+| 🟢 Low | Email notifications via Resend |
+| 🟢 Low | Search wired to API |
+| 🟢 Low | Deploy to Vercel |
 
 ---
 

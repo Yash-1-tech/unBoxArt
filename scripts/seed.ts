@@ -1,8 +1,3 @@
-/**
- * MongoDB Seed Script for Unboxarts
- * Run: npx ts-node scripts/seed.ts
- */
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
