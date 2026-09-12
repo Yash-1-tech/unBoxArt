@@ -28,8 +28,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
     }
 
-    const cookieStore = cookies();
-    const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
+    const cookieStore = await cookies();
+    const session = await getIronSession<SessionData>(
+      cookieStore,
+      sessionOptions
+    );
 
     session.user = {
       id: user._id.toString(),
