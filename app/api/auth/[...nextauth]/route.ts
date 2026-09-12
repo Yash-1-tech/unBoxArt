@@ -15,6 +15,10 @@ const handler = NextAuth({
   ],
   callbacks: {
     async signIn({ user, account }) {
+      console.log('OAuth signIn started');
+      console.log('Provider:', account?.provider);
+      console.log('User email:', user.email);
+
       if (account?.provider === 'google') {
         try {
           await connectDB();
@@ -32,7 +36,7 @@ const handler = NextAuth({
           }
 
           // Set iron-session cookie so our app recognises the login
-          const cookieStore = cookies();
+          const cookieStore = await cookies();
           const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
           session.user = {
             id: dbUser._id.toString(),
