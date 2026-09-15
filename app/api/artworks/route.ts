@@ -48,11 +48,17 @@ export async function GET(req: NextRequest) {
       'most-liked': { likes: -1 },
     };
     const sort = sortMap[sortParam] || sortMap.newest;
+    const sortString = Object.entries(sort)
+      .map(([field, direction]) =>
+        direction === 1 ? field : `-${field}`
+      )
+      .join(' ');
+
 
     const [artworks, total] = await Promise.all([
       Artwork.find(query)
         .populate('artist', 'name profileImage location rating')
-        .sort(sort)
+        .sort(sortString)
         .skip(skip)
         .limit(limit)
         .lean(),
