@@ -110,9 +110,9 @@ This adds the 4 artists, 9 artworks, and 6 blog posts to your live database.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MONGODB_URI` | ✅ | MongoDB Atlas connection string |
-| `NEXTAUTH_SECRET` | ✅ | Random 32+ char string for session encryption |
-| `NEXTAUTH_URL` | ✅ | Your production URL |
+| `MONGODB_URI` | Yes | MongoDB Atlas connection string |
+| `NEXTAUTH_SECRET` | Yes | Random 32+ char string for session encryption |
+| `NEXTAUTH_URL` | Yes | Your production URL |
 | `CLOUDINARY_CLOUD_NAME` | For image uploads | From Cloudinary dashboard |
 | `CLOUDINARY_API_KEY` | For image uploads | From Cloudinary dashboard |
 | `CLOUDINARY_API_SECRET` | For image uploads | From Cloudinary dashboard |

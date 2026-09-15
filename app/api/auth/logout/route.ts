@@ -5,11 +5,24 @@ import { sessionOptions, type SessionData } from '@/lib/session';
 
 export async function POST() {
   try {
-    const cookieStore = cookies();
-    const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
+    const cookieStore = await cookies();
+
+    const session = await getIronSession<SessionData>(
+      cookieStore,
+      sessionOptions
+    );
+
     session.destroy();
-    return NextResponse.json({ message: 'Logged out successfully' });
+
+    return NextResponse.json({
+      message: 'Logged out successfully',
+    });
   } catch (err) {
-    return NextResponse.json({ error: 'Logout failed' }, { status: 500 });
+    console.error('[POST /api/auth/logout]', err);
+
+    return NextResponse.json(
+      { error: 'Logout failed' },
+      { status: 500 }
+    );
   }
 }
