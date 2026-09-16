@@ -200,8 +200,25 @@ export default function UploadArtworkPage() {
             <input name="medium" value={form.medium} onChange={handleChange} placeholder="Acrylic on Canvas" className="input-field" required />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Subject</label>
-            <input name="subject" value={form.subject} onChange={handleChange} placeholder="Landscape" className="input-field" />
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+              Subject *
+            </label>
+
+            <select
+              name="subject"
+              value={form.subject}
+              onChange={handleChange}
+              className="input-field"
+              required
+            >
+              <option value="">Select a subject</option>
+              <option value="Abstract">Abstract</option>
+              <option value="Landscape">Landscape</option>
+              <option value="Portrait">Portrait</option>
+              <option value="Still Life">Still Life</option>
+              <option value="Wildlife">Wildlife</option>
+              <option value="Religious">Religious</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Style</label>
