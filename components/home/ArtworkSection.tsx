@@ -80,7 +80,7 @@ export default function ArtworkSection({
                 likes={art.likes}
                 views={art.views}
                 comments={art.reviewCount}
-                rating={art.avgRating || 4.0}
+                rating={art.avgRating || 0}
               />
             ))}
           </div>
