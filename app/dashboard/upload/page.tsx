@@ -292,7 +292,7 @@ export default function UploadArtworkPage() {
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Digital Print Price (₹)</label>
-            <input name="digitalPrintPrice" type="number" min="0" step="1" value={form.digitalPrintPrice} onChange={handleChange} placeholder="4999" className="input-field" required/>
+            <input name="digitalPrintPrice" type="number" min="0" step="1" value={form.digitalPrintPrice} onChange={handleChange} placeholder="4999" className="input-field" />
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Shipping Cost (₹)</label>
