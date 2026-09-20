@@ -23,11 +23,19 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const { artworkId, type } = await req.json();
+    const body = await req.json();
+    const { artworkId, type } = body;
 
     if (!artworkId || !type) {
       return NextResponse.json(
         { error: 'Artwork ID and item type are required' },
+        { status: 400 }
+      );
+    }
+
+    if (type !== 'original' && type !== 'digital_print') {
+      return NextResponse.json(
+        { error: 'Invalid item type' },
         { status: 400 }
       );
     }
@@ -62,9 +70,17 @@ export async function DELETE(req: NextRequest) {
 
     await cart.save();
 
+    const populatedCart = await Cart.findById(cart._id).populate({
+      path: 'items.artwork',
+      populate: {
+        path: 'artist',
+        select: 'name profileImage',
+      },
+    });
+
     return NextResponse.json({
       message: 'Item removed from cart',
-      cart,
+      cart: populatedCart,
     });
   } catch (err) {
     console.error('[DELETE /api/cart/item]', err);
