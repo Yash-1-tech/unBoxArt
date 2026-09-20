@@ -1,4 +1,4 @@
-import { type IronSessionOptions } from 'iron-session';
+import { type SessionOptions } from 'iron-session';
 
 export interface SessionUser {
   id: string;
@@ -13,12 +13,16 @@ export interface SessionData {
   user?: SessionUser;
 }
 
-export const sessionOptions: IronSessionOptions = {
-  password: process.env.NEXTAUTH_SECRET || 'fallback-secret-must-be-32-chars-long!!',
+export const sessionOptions: SessionOptions = {
+  password:
+    process.env.NEXTAUTH_SECRET ||
+    'fallback-secret-must-be-32-chars-long!!',
+
   cookieName: 'unboxarts-session',
+
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 7,
     httpOnly: true,
     sameSite: 'lax',
   },

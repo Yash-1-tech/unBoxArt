@@ -1,13 +1,26 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X, ImagePlus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function UploadArtworkPage() {
-  const { user } = useAuth();
   const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      router.replace('/auth/signin');
+      return;
+    }
+
+    if (user.role !== 'artist') {
+      router.replace('/dashboard');
+    }
+  }, [user, loading, router]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -111,7 +124,6 @@ export default function UploadArtworkPage() {
           shippingCost: Number(form.shippingCost),
           stock: Number(form.stock),
           images: imageUrls,
-          artist: user.id,  // ← automatically from session
         }),
       });
 
@@ -127,11 +139,10 @@ export default function UploadArtworkPage() {
     }
   };
 
-  if (!user) {
+  if (loading || !user || user.role !== 'artist') {
     return (
       <div className="max-w-3xl mx-auto px-4 py-24 text-center">
-        <p className="text-gray-500 mb-4">You need to be logged in to upload artwork.</p>
-        <a href="/auth/signin" className="btn-primary">Sign In</a>
+        <p className="text-gray-500">Checking your account...</p>
       </div>
     );
   }

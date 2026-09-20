@@ -14,9 +14,9 @@ import SellerOrders from '@/components/dashboard/SellerOrders';
 const NAV_ITEMS = [
   { id: 'profile', label: 'My Profile', icon: User },
   { id: 'messages', label: 'Messages / Notifications', icon: MessageSquare },
-  { id: 'artworks', label: 'Manage Artworks', icon: Image },
+  { id: 'artworks', label: 'Manage Artworks', icon: Image, artistOnly: true },
   { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-  { id: 'sales', label: 'My Sales', icon: Package },
+  { id: 'sales', label: 'My Sales', icon: Package, artistOnly: true },
   { id: 'payment', label: 'My Payment Details', icon: CreditCard },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'plans', label: 'Plan Systems', icon: Star },
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           )}
 
           <nav className="space-y-0.5">
-            {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            {NAV_ITEMS.filter((item) => !item.artistOnly || user?.role === 'artist').map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
@@ -213,9 +213,14 @@ export default function DashboardPage() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-base font-semibold text-gray-900">Manage Artworks</h2>
-                <Link href="/dashboard/upload" className="btn-primary flex items-center gap-2 text-xs">
-                  <Plus size={14} /> Add Artwork
-                </Link>
+                {user?.role === 'artist' && (
+                  <Link
+                    href="/dashboard/upload"
+                    className="btn-primary flex items-center gap-2 text-xs"
+                  >
+                    <Plus size={14} /> Add Artwork
+                  </Link>
+                )}
               </div>
 
               <div className="border border-gray-100">
