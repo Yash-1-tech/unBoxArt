@@ -530,6 +530,291 @@ export default function DashboardPage() {
                   </Link>
                 )}
               </div>
+              {editingArtwork && (
+                <div className="border border-gray-200 p-6 mb-6 bg-white">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        Edit Artwork
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Code: {editingArtwork.code}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingArtwork(null)}
+                      className="text-gray-400 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {editError && (
+                    <p className="text-sm text-red-500 bg-red-50 border border-red-200 px-4 py-3 mb-5 rounded">
+                      {editError}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Title
+                      </label>
+                      <input
+                        value={editingArtwork.title}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            title: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Description
+                      </label>
+                      <textarea
+                        value={editingArtwork.description || ''}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            description: e.target.value,
+                          })
+                        }
+                        rows={4}
+                        className="input-field resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Medium
+                      </label>
+                      <select
+                        value={editingArtwork.medium}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            medium: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      >
+                        <option value="Acrylic">Acrylic</option>
+                        <option value="Oil">Oil</option>
+                        <option value="Watercolor">Watercolor</option>
+                        <option value="Pencil">Pencil</option>
+                        <option value="Digital">Digital</option>
+                        <option value="Mixed Media">Mixed Media</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Subject
+                      </label>
+                      <select
+                        value={editingArtwork.subject}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            subject: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      >
+                        <option value="Abstract">Abstract</option>
+                        <option value="Landscape">Landscape</option>
+                        <option value="Portrait">Portrait</option>
+                        <option value="Still Life">Still Life</option>
+                        <option value="Wildlife">Wildlife</option>
+                        <option value="Religious">Religious</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Style
+                      </label>
+                      <select
+                        value={editingArtwork.style || ''}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            style: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      >
+                        <option value="">Select a style</option>
+                        <option value="Modern">Modern</option>
+                        <option value="Contemporary">Contemporary</option>
+                        <option value="Impressionist">Impressionist</option>
+                        <option value="Realist">Realist</option>
+                        <option value="Expressionist">Expressionist</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Original Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editingArtwork.originalPrice}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            originalPrice: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Digital Print Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editingArtwork.digitalPrintPrice ?? ''}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            digitalPrintPrice: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Shipping Cost (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editingArtwork.shippingCost}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            shippingCost: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Stock
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editingArtwork.stock}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            stock: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Width
+                      </label>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editingArtwork.width}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            width: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Height
+                      </label>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editingArtwork.height}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            height: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                        Unit
+                      </label>
+                      <select
+                        value={editingArtwork.unit}
+                        onChange={(e) =>
+                          setEditingArtwork({
+                            ...editingArtwork,
+                            unit: e.target.value,
+                          })
+                        }
+                        className="input-field"
+                      >
+                        <option value="in">inches</option>
+                        <option value="cm">cm</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={() => setEditingArtwork(null)}
+                      className="btn-secondary px-6"
+                      disabled={editSaving}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveArtwork}
+                      disabled={editSaving}
+                      className="btn-primary px-6 disabled:opacity-60"
+                    >
+                      {editSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Non-artist protection */}
               {user?.role !== 'artist' ? (
                 <div className="text-sm text-gray-500 text-center py-16 border border-dashed border-gray-200">
