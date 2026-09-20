@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-} from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, X } from 'lucide-react';
@@ -74,7 +70,8 @@ const parameterForFilter: Record<FilterKey, string> = {
   Style: 'style',
 };
 
-function normalizeValue(value: string) {
+
+function normalizeValue(value: string): string {
   return value
     .trim()
     .toLowerCase()
@@ -82,45 +79,47 @@ function normalizeValue(value: string) {
     .replace(/\s+/g, ' ');
 }
 
+
 function findMatchingOption(
   key: FilterKey,
   value: string
-) {
+): string | null {
   const normalized = normalizeValue(value);
 
   return (
     filterOptions[key].find(
-      (option) =>
-        normalizeValue(option) === normalized
+      (option) => normalizeValue(option) === normalized
     ) || null
   );
 }
+
 
 function getFiltersFromUrl(
   searchParams: URLSearchParams
 ): ActiveFilter[] {
   const filters: ActiveFilter[] = [];
 
-  (
-    Object.keys(parameterForFilter) as FilterKey[]
-  ).forEach((key) => {
-    const parameter = parameterForFilter[key];
-    const urlValue = searchParams.get(parameter);
+  (Object.keys(parameterForFilter) as FilterKey[]).forEach(
+    (key) => {
+      const parameter = parameterForFilter[key];
+      const urlValue = searchParams.get(parameter);
 
-    if (!urlValue) return;
+      if (!urlValue) {
+        return;
+      }
 
-    const matchingOption = findMatchingOption(
-      key,
-      urlValue
-    );
+      const matchingOption = findMatchingOption(
+        key,
+        urlValue
+      );
 
-    if (matchingOption) {
+
       filters.push({
         key,
-        value: matchingOption,
+        value: matchingOption || urlValue,
       });
     }
-  });
+  );
 
   return filters;
 }
@@ -143,19 +142,18 @@ export default function GalleryPage() {
     useState<FilterKey | null>(null);
 
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] =
-    useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
 
   useEffect(() => {
-    const filters =
-      getFiltersFromUrl(searchParams);
+    const filters = getFiltersFromUrl(
+      searchParams
+    );
 
     setActiveFilters(filters);
 
-    const urlSort =
-      searchParams.get('sort');
+    const urlSort = searchParams.get('sort');
 
     if (
       urlSort === 'popular' ||
@@ -168,21 +166,21 @@ export default function GalleryPage() {
       setSortBy('newest');
     }
 
-
     setOpenDropdown(null);
   }, [searchParams]);
+
 
   const fetchArtworks = useCallback(
     async (
       pageNumber: number,
-      append = false
+      append = false,
+      signal?: AbortSignal
     ) => {
       setLoading(true);
       setError('');
 
       try {
-        const params =
-          new URLSearchParams();
+        const params = new URLSearchParams();
 
         params.set(
           'page',
@@ -199,27 +197,24 @@ export default function GalleryPage() {
           sortBy
         );
 
-        activeFilters.forEach(
-          (filter) => {
-            const parameter =
-              parameterForFilter[
-                filter.key
-              ];
 
-            params.set(
-              parameter,
-              filter.value
-            );
+        activeFilters.forEach((filter) => {
+          const parameter =
+            parameterForFilter[filter.key];
+
+          params.set(
+            parameter,
+            filter.value
+          );
+        });
+
+        const response = await fetch(
+          `/api/artworks?${params.toString()}`,
+          {
+            signal,
+            cache: 'no-store',
           }
         );
-
-        const response =
-          await fetch(
-            `/api/artworks?${params.toString()}`,
-            {
-              cache: 'no-store',
-            }
-          );
 
         const data =
           await response
@@ -233,17 +228,15 @@ export default function GalleryPage() {
           );
         }
 
-        const results =
-          Array.isArray(data.artworks)
-            ? data.artworks
-            : [];
+        const results = Array.isArray(
+          data.artworks
+        )
+          ? data.artworks
+          : [];
 
         setArtworks((previous) =>
           append
-            ? [
-                ...previous,
-                ...results,
-              ]
+            ? [...previous, ...results]
             : results
         );
 
@@ -255,6 +248,13 @@ export default function GalleryPage() {
           Boolean(data.hasMore)
         );
       } catch (err) {
+        if (
+          err instanceof DOMException &&
+          err.name === 'AbortError'
+        ) {
+          return;
+        }
+
         console.error(
           'Failed to fetch artworks:',
           err
@@ -269,25 +269,26 @@ export default function GalleryPage() {
         setLoading(false);
       }
     },
-    [
-      activeFilters,
-      sortBy,
-    ]
+    [sortBy, activeFilters]
   );
 
 
   useEffect(() => {
+    const controller =
+      new AbortController();
+
     setPage(1);
 
     fetchArtworks(
       1,
-      false
+      false,
+      controller.signal
     );
-  }, [
-    activeFilters,
-    sortBy,
-    fetchArtworks,
-  ]);
+
+    return () => {
+      controller.abort();
+    };
+  }, [fetchArtworks]);
 
 
   const navigateWithFilters = (
@@ -297,32 +298,20 @@ export default function GalleryPage() {
     const params =
       new URLSearchParams();
 
-    filters.forEach(
-      (filter) => {
-        const parameter =
-          parameterForFilter[
-            filter.key
-          ];
+    filters.forEach((filter) => {
+      const parameter =
+        parameterForFilter[filter.key];
 
-        /*
-         * Convert:
-         * Still Life -> still-life
-         * Mixed Media -> mixed-media
-         */
-        const urlValue =
-          normalizeValue(
-            filter.value
-          ).replace(
-            /\s+/g,
-            '-'
-          );
 
-        params.set(
-          parameter,
-          urlValue
-        );
-      }
-    );
+      const urlValue = normalizeValue(
+        filter.value
+      ).replace(/\s+/g, '-');
+
+      params.set(
+        parameter,
+        urlValue
+      );
+    });
 
     if (sort !== 'newest') {
       params.set(
@@ -341,9 +330,7 @@ export default function GalleryPage() {
     router.push(url);
   };
 
-  /*
-   * Handle selecting a filter.
-   */
+
   const handleFilterSelect = (
     key: FilterKey,
     value: string
@@ -356,13 +343,9 @@ export default function GalleryPage() {
 
     let nextFilters: ActiveFilter[];
 
-    /*
-     * Clicking the same selected option
-     * removes the filter.
-     */
+
     if (
-      currentlySelected?.value ===
-      value
+      currentlySelected?.value === value
     ) {
       nextFilters =
         activeFilters.filter(
@@ -370,10 +353,7 @@ export default function GalleryPage() {
             filter.key !== key
         );
     } else {
-      /*
-       * Replace the current filter for
-       * this category.
-       */
+
       nextFilters = [
         ...activeFilters.filter(
           (filter) =>
@@ -386,34 +366,18 @@ export default function GalleryPage() {
       ];
     }
 
-    /*
-     * Update local state immediately.
-     */
     setActiveFilters(
       nextFilters
     );
 
-    /*
-     * Close dropdown immediately.
-     */
     setOpenDropdown(null);
 
-    /*
-     * Navigate using Next.js.
-     *
-     * This causes the URL to update and
-     * causes the page to fetch the new
-     * filtered results.
-     */
     navigateWithFilters(
       nextFilters,
       sortBy
     );
   };
 
-  /*
-   * Remove an active filter.
-   */
   const removeFilter = (
     filterToRemove: ActiveFilter
   ) => {
@@ -438,9 +402,7 @@ export default function GalleryPage() {
     );
   };
 
-  /*
-   * Clear everything.
-   */
+
   const clearFilters = () => {
     setActiveFilters([]);
     setSortBy('newest');
@@ -451,9 +413,7 @@ export default function GalleryPage() {
     );
   };
 
-  /*
-   * Sorting.
-   */
+
   const handleSortChange = (
     value: string
   ) => {
@@ -465,9 +425,7 @@ export default function GalleryPage() {
     );
   };
 
-  /*
-   * Load another page.
-   */
+
   const loadMore = () => {
     if (
       loading ||
@@ -487,15 +445,11 @@ export default function GalleryPage() {
     );
   };
 
-  /*
-   * Display dimensions correctly.
-   */
+
   const formatDimensions = (
     artwork: Artwork
   ) => {
-    if (
-      !artwork.dimensions
-    ) {
+    if (!artwork.dimensions) {
       return 'Dimensions unavailable';
     }
 
@@ -512,13 +466,14 @@ export default function GalleryPage() {
       return 'Dimensions unavailable';
     }
 
-    return `${width}×${height}${unit === 'cm' ? 'cm' : 'in'}`;
+    return `${width}×${height}${
+      unit === 'cm'
+        ? 'cm'
+        : 'in'
+    }`;
   };
 
-  /*
-   * Do not display a rating when there
-   * are no reviews.
-   */
+  
   const getRating = (
     artwork: Artwork
   ) => {
@@ -574,17 +529,20 @@ export default function GalleryPage() {
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Filter Toolbar */}
       <div className="sticky top-16 z-30 bg-white pb-3 pt-1 border-b border-gray-100 mb-6">
 
         <div className="flex items-center flex-wrap gap-2">
 
-          {(Object.entries(
-            filterOptions
-          ) as [
-            FilterKey,
-            string[]
-          ][]).map(
+          {/* Filter Dropdowns */}
+          {(
+            Object.entries(
+              filterOptions
+            ) as [
+              FilterKey,
+              string[]
+            ][]
+          ).map(
             ([key, options]) => {
               const active =
                 activeFilters.find(
@@ -600,24 +558,18 @@ export default function GalleryPage() {
                   key={key}
                   className="relative"
                 >
-
-                  {/* Dropdown Button */}
                   <button
                     type="button"
                     aria-expanded={
                       isOpen
                     }
-                    onClick={(
-                      event
-                    ) => {
-                      event.stopPropagation();
-
+                    onClick={() =>
                       setOpenDropdown(
                         isOpen
                           ? null
                           : key
-                      );
-                    }}
+                      )
+                    }
                     className={`flex items-center gap-1.5 text-xs border px-3 py-2 pr-7 relative whitespace-nowrap transition-colors ${
                       active
                         ? 'border-[#e63329] text-[#e63329] bg-red-50'
@@ -638,49 +590,52 @@ export default function GalleryPage() {
                     />
                   </button>
 
-                  {/* Dropdown Menu */}
                   {isOpen && (
-                    <div
-                      className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-[100] min-w-[180px] py-1"
-                      onClick={(
-                        event
-                      ) => {
-                        event.stopPropagation();
-                      }}
-                    >
-                      {options.map(
-                        (option) => {
-                          const selected =
-                            activeFilters.some(
-                              (filter) =>
-                                filter.key ===
-                                  key &&
-                                filter.value ===
-                                  option
-                            );
-
-                          return (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() =>
-                                handleFilterSelect(
-                                  key,
-                                  option
-                                )
-                              }
-                              className={`block w-full text-left px-4 py-2.5 text-xs transition-colors ${
-                                selected
-                                  ? 'bg-red-50 text-[#e63329] font-semibold'
-                                  : 'text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              {option}
-                            </button>
-                          );
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() =>
+                          setOpenDropdown(
+                            null
+                          )
                         }
-                      )}
-                    </div>
+                      />
+
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 shadow-lg z-20 min-w-[180px] py-1">
+                        {options.map(
+                          (option) => {
+                            const selected =
+                              activeFilters.some(
+                                (filter) =>
+                                  filter.key ===
+                                    key &&
+                                  filter.value ===
+                                    option
+                              );
+
+                            return (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() =>
+                                  handleFilterSelect(
+                                    key,
+                                    option
+                                  )
+                                }
+                                className={`w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 transition-colors ${
+                                  selected
+                                    ? 'bg-red-50 text-[#e63329] font-medium'
+                                    : 'text-gray-700'
+                                }`}
+                              >
+                                {option}
+                              </button>
+                            );
+                          }
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -722,9 +677,7 @@ export default function GalleryPage() {
             />
           </div>
 
-          {/* Clear */}
-          {activeFilters.length >
-            0 && (
+          {activeFilters.length > 0 && (
             <button
               type="button"
               onClick={
@@ -738,9 +691,7 @@ export default function GalleryPage() {
           )}
         </div>
 
-        {/* Active Tags */}
-        {activeFilters.length >
-          0 && (
+        {activeFilters.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {activeFilters.map(
               (filter) => (
@@ -752,12 +703,12 @@ export default function GalleryPage() {
 
                   <button
                     type="button"
+                    aria-label={`Remove ${filter.value} filter`}
                     onClick={() =>
                       removeFilter(
                         filter
                       )
                     }
-                    aria-label={`Remove ${filter.value}`}
                     className="hover:text-red-800"
                   >
                     <X size={10} />
@@ -769,52 +720,52 @@ export default function GalleryPage() {
         )}
       </div>
 
-      {/* Error */}
       {error && (
         <div className="text-sm text-red-500 bg-red-50 border border-red-200 px-4 py-3 mb-6">
           {error}
         </div>
       )}
 
-      {/* Initial Loading */}
       {loading &&
       artworks.length === 0 ? (
         <div className="columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4">
           {Array.from({
             length: 8,
-          }).map((_, index) => (
-            <div
-              key={index}
-              className="break-inside-avoid"
-            >
+          }).map(
+            (_, index) => (
               <div
-                className="bg-gray-100 animate-pulse rounded-sm"
-                style={{
-                  height: `${
-                    200 +
-                    (index % 3) *
-                      60
-                  }px`,
-                }}
-              />
+                key={index}
+                className="break-inside-avoid"
+              >
+                <div
+                  className="bg-gray-100 animate-pulse rounded-sm"
+                  style={{
+                    height: `${
+                      200 +
+                      (index % 3) *
+                        60
+                    }px`,
+                  }}
+                />
 
-              <div className="pt-2 space-y-1">
-                <div className="h-3 bg-gray-100 animate-pulse rounded w-3/4" />
-                <div className="h-2 bg-gray-100 animate-pulse rounded w-1/2" />
+                <div className="pt-2 space-y-1">
+                  <div className="h-3 bg-gray-100 animate-pulse rounded w-3/4" />
+
+                  <div className="h-2 bg-gray-100 animate-pulse rounded w-1/2" />
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
-      ) : artworks.length ===
-        0 ? (
-        /* Empty */
+
+      ) : artworks.length === 0 ? (
+
         <div className="text-center py-20">
           <p className="text-gray-400 mb-4">
             No artworks found
           </p>
 
-          {activeFilters.length >
-            0 && (
+          {activeFilters.length > 0 && (
             <button
               type="button"
               onClick={
@@ -826,22 +777,20 @@ export default function GalleryPage() {
             </button>
           )}
         </div>
+
       ) : (
+
         <>
-          {/* Count */}
           <p className="text-xs text-gray-400 mb-4">
             Showing {artworks.length} of{' '}
             {total} artworks
           </p>
 
-          {/* Artwork Grid */}
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-4 space-y-4">
             {artworks.map(
               (artwork) => (
                 <div
-                  key={
-                    artwork._id
-                  }
+                  key={artwork._id}
                   className="break-inside-avoid"
                 >
                   <ArtworkCard
@@ -909,7 +858,6 @@ export default function GalleryPage() {
             </div>
           )}
 
-          {/* Finished */}
           {!hasMore &&
             total > 0 && (
               <p className="text-center text-xs text-gray-400 mt-10">
