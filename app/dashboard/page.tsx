@@ -83,6 +83,9 @@ export default function DashboardPage() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [artworksLoading, setArtworksLoading] = useState(false);
   const [artworksError, setArtworksError] = useState('');
+  const [editingArtwork, setEditingArtwork] = useState<any | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     if (!user || user.role !== 'artist') {
@@ -197,6 +200,76 @@ export default function DashboardPage() {
     }
   };
   
+  const handleEditArtwork = (artwork: any) => {
+    setEditError('');
+    setEditingArtwork({
+      ...artwork,
+      originalPrice: artwork.originalPrice ?? '',
+      digitalPrintPrice: artwork.digitalPrintPrice ?? '',
+      shippingCost: artwork.shippingCost ?? 0,
+      width: artwork.dimensions?.width ?? '',
+      height: artwork.dimensions?.height ?? '',
+      unit: artwork.dimensions?.unit ?? 'in',
+    });
+  };
+
+  const handleSaveArtwork = async () => {
+    if (!editingArtwork) return;
+
+    setEditSaving(true);
+    setEditError('');
+
+    try {
+      const res = await fetch(`/api/artworks/${editingArtwork._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: editingArtwork.title,
+          description: editingArtwork.description || '',
+          medium: editingArtwork.medium,
+          subject: editingArtwork.subject,
+          style: editingArtwork.style || '',
+          originalPrice: Number(editingArtwork.originalPrice),
+          digitalPrintPrice:
+            editingArtwork.digitalPrintPrice === '' ||
+            editingArtwork.digitalPrintPrice == null
+              ? undefined
+              : Number(editingArtwork.digitalPrintPrice),
+          shippingCost: Number(editingArtwork.shippingCost),
+          stock: Number(editingArtwork.stock),
+          isAvailable: editingArtwork.isAvailable,
+          dimensions: {
+            width: Number(editingArtwork.width),
+            height: Number(editingArtwork.height),
+            unit: editingArtwork.unit,
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update artwork');
+      }
+
+      setArtworks((prev) =>
+        prev.map((artwork) =>
+          artwork._id === data._id ? data : artwork
+        )
+      );
+
+      setEditingArtwork(null);
+    } catch (err) {
+      setEditError(
+        err instanceof Error ? err.message : 'Failed to update artwork'
+      );
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const getInitials = (name?: string) => {
     if (!name) return 'U';
 
@@ -443,25 +516,20 @@ export default function DashboardPage() {
 
           {activeSection === 'artworks' && (
             <div>
-
               <div className="flex items-center justify-between mb-6">
-
                 <h2 className="text-base font-semibold text-gray-900">
                   Manage Artworks
                 </h2>
-
                 {user?.role === 'artist' && (
                   <Link
                     href="/dashboard/upload"
                     className="btn-primary flex items-center gap-2 text-xs"
                   >
                     <Plus size={14} />
-
                     Add Artwork
                   </Link>
                 )}
               </div>
-
               {/* Non-artist protection */}
               {user?.role !== 'artist' ? (
                 <div className="text-sm text-gray-500 text-center py-16 border border-dashed border-gray-200">
@@ -634,18 +702,10 @@ export default function DashboardPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5">
-
                         <button
-                          type="button"
+                          onClick={() => handleEditArtwork(artwork)}
                           className="p-1.5 hover:text-[#e63329] transition-colors"
-                          aria-label={`Edit ${artwork.title}`}
-                          onClick={() => {
-                            // Edit functionality will be added next.
-                            console.log(
-                              'Edit artwork:',
-                              artwork._id
-                            );
-                          }}
+                          aria-label="Edit"
                         >
                           <Edit3 size={14} />
                         </button>
