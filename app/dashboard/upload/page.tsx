@@ -52,22 +52,35 @@ export default function UploadArtworkPage() {
       return setError('Title, medium, and price are required');
     }
     if (!user) return setError('You must be logged in to upload artwork');
+    if (!form.title || !form.medium || !form.subject || !form.originalPrice || !form.width || !form.height) {
+      return setError('Title, medium, subject, price, width, and height are required');
+    }
 
     setUploading(true);
     try {
-      let imageUrls: string[] = [];
+      const formData = new FormData();
 
-      // If Cloudinary keys are set, upload. Otherwise use placeholder.
-      if (process.env.NEXT_PUBLIC_APP_URL) {
-        const formData = new FormData();
-        images.forEach((img) => formData.append('files', img.file));
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) throw new Error(uploadData.error || 'Image upload failed');
-        imageUrls = uploadData.urls;
-      } else {
-        // Fallback: use local object URLs (works without Cloudinary for testing)
-        imageUrls = images.map((img) => img.preview);
+      images.forEach((img) => {
+        formData.append('files', img.file);
+      });
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok) {
+        throw new Error(
+          uploadData.error || 'Image upload failed'
+        );
+      }
+
+      const imageUrls: string[] = uploadData.urls || [];
+
+      if (imageUrls.length === 0) {
+        throw new Error('Image upload returned no image URLs');
       }
 
       const artworkRes = await fetch('/api/artworks', {
@@ -197,20 +210,19 @@ export default function UploadArtworkPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Medium *</label>
-            <input name="medium" value={form.medium} onChange={handleChange} placeholder="Acrylic on Canvas" className="input-field" required />
+            <select name="medium" value={form.medium} onChange={handleChange} className="input-field" required>
+              <option value="">Select a medium</option>
+              <option value="Acrylic">Acrylic</option>
+              <option value="Oil">Oil</option>
+              <option value="Watercolor">Watercolor</option>
+              <option value="Pencil">Pencil</option>
+              <option value="Digital">Digital</option>
+              <option value="Mixed Media">Mixed Media</option>
+            </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
-              Subject *
-            </label>
-
-            <select
-              name="subject"
-              value={form.subject}
-              onChange={handleChange}
-              className="input-field"
-              required
-            >
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Subject *</label>
+            <select name="subject" value={form.subject} onChange={handleChange} className="input-field" required>
               <option value="">Select a subject</option>
               <option value="Abstract">Abstract</option>
               <option value="Landscape">Landscape</option>
@@ -222,19 +234,26 @@ export default function UploadArtworkPage() {
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Style</label>
-            <input name="style" value={form.style} onChange={handleChange} placeholder="Abstract" className="input-field" />
+            <select name="style" value={form.style} onChange={handleChange} className="input-field">
+              <option value="">Select a style</option>
+              <option value="Modern">Modern</option>
+              <option value="Contemporary">Contemporary</option>
+              <option value="Impressionist">Impressionist</option>
+              <option value="Realist">Realist</option>
+              <option value="Expressionist">Expressionist</option>
+            </select>
           </div>
         </div>
 
         {/* Dimensions */}
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Width</label>
-            <input name="width" type="number" value={form.width} onChange={handleChange} placeholder="36" className="input-field" />
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Width *</label>
+            <input name="width" type="number" min="0.1" step="0.1" value={form.width} onChange={handleChange} placeholder="36" className="input-field" required />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Height</label>
-            <input name="height" type="number" value={form.height} onChange={handleChange} placeholder="36" className="input-field" />
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Height *</label>
+            <input name="height" type="number" min="0.1" step="0.1" value={form.height} onChange={handleChange} placeholder="36" className="input-field" required />
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Unit</label>
@@ -249,11 +268,11 @@ export default function UploadArtworkPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Original Price (₹) *</label>
-            <input name="originalPrice" type="number" value={form.originalPrice} onChange={handleChange} placeholder="160000" className="input-field" required />
+            <input name="originalPrice" type="number" min="0" step="1" value={form.originalPrice} onChange={handleChange} placeholder="160000" className="input-field" required/>
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Digital Print Price (₹)</label>
-            <input name="digitalPrintPrice" type="number" value={form.digitalPrintPrice} onChange={handleChange} placeholder="4999" className="input-field" />
+            <input name="digitalPrintPrice" type="number" min="0" step="1" value={form.digitalPrintPrice} onChange={handleChange} placeholder="4999" className="input-field" required/>
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Shipping Cost (₹)</label>
