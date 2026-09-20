@@ -171,6 +171,32 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteArtwork = async (artworkId: string) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this artwork? This action cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/artworks/${artworkId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete artwork');
+      }
+
+      setArtworks((prev) =>
+        prev.filter((artwork) => artwork._id !== artworkId)
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete artwork');
+    }
+  };
+  
   const getInitials = (name?: string) => {
     if (!name) return 'U';
 
@@ -625,16 +651,9 @@ export default function DashboardPage() {
                         </button>
 
                         <button
-                          type="button"
+                          onClick={() => handleDeleteArtwork(artwork._id)}
                           className="p-1.5 hover:text-red-500 transition-colors"
-                          aria-label={`Delete ${artwork.title}`}
-                          onClick={() => {
-                            // Delete functionality will be added next.
-                            console.log(
-                              'Delete artwork:',
-                              artwork._id
-                            );
-                          }}
+                          aria-label="Delete"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -650,7 +669,6 @@ export default function DashboardPage() {
 
             </div>
           )}
-
 
           {activeSection === 'orders' && (
             <div>
