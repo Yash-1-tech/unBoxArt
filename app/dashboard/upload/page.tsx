@@ -55,6 +55,15 @@ export default function UploadArtworkPage() {
     if (!form.title || !form.medium || !form.subject || !form.originalPrice || !form.width || !form.height) {
       return setError('Title, medium, subject, price, width, and height are required');
     }
+    if (Number(form.originalPrice) < 0) {
+      return setError('Original price cannot be negative');
+    }
+    if (form.digitalPrintPrice && Number(form.digitalPrintPrice) < 0) {
+      return setError('Digital print price cannot be negative');
+    }
+    if (Number(form.shippingCost) < 0) {
+      return setError('Shipping cost cannot be negative');
+    }
 
     setUploading(true);
     try {
