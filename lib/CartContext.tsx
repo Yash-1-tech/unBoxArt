@@ -71,6 +71,8 @@ interface AddItemInput {
 interface CartContextType {
   items: CartItem[];
   count: number;
+  loading: boolean;
+  removingItemId: string | null;
   subtotal: number;
   shipping: number;
   total: number;
@@ -81,6 +83,11 @@ interface CartContextType {
 
   removeItem: (id: string) => Promise<void>;
 
+  updateQuantity: (
+  id: string,
+  quantity: number
+  ) => Promise<void>;
+
   clearCart: () => Promise<void>;
 
   isInCart: (artworkId: string) => boolean;
@@ -89,6 +96,8 @@ interface CartContextType {
 const CartContext = createContext<CartContextType>({
   items: [],
   count: 0,
+  loading: false,
+  removingItemId: null,
   subtotal: 0,
   shipping: 0,
   total: 0,
@@ -98,6 +107,8 @@ const CartContext = createContext<CartContextType>({
   }),
 
   removeItem: async () => {},
+
+  updateQuantity: async () => {},
 
   clearCart: async () => {},
 
@@ -163,11 +174,18 @@ export function CartProvider({
 
   const [items, setItems] = useState<CartItem[]>([]);
 
+  const [loading, setLoading] = useState(true);
+  const [removingItemId, setRemovingItemId] =
+  useState<string | null>(null);
+
   const loadCart = useCallback(async () => {
     if (!user || user.role !== 'buyer') {
       setItems([]);
+      setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     try {
       const response = await fetch('/api/cart', {
@@ -189,6 +207,8 @@ export function CartProvider({
     } catch (error) {
       console.error('Failed to load cart:', error);
       setItems([]);
+    } finally {
+      setLoading(false);
     }
   }, [user]);
 
@@ -283,6 +303,8 @@ export function CartProvider({
         );
         return;
       }
+      
+      setRemovingItemId(id);
 
       try {
         const response = await fetch('/api/cart/item', {
@@ -314,8 +336,70 @@ export function CartProvider({
           error
         );
 
-        // Re-sync with the server in case the local state
-        // and database became out of sync.
+        await loadCart();
+      } finally {
+        setRemovingItemId(null);
+      }
+    },
+    [items, loadCart]
+  );
+
+  const updateQuantity = useCallback(
+    async (id: string, quantity: number) => {
+      const item = items.find(
+        (cartItem) => cartItem.id === id
+      );
+
+      if (!item) {
+        console.warn(
+          `Cart item "${id}" was not found in local state.`
+        );
+        return;
+      }
+
+      if (!item.artworkId || !item.type) {
+        console.error(
+          'Cannot update invalid cart item:',
+          item
+        );
+        return;
+      }
+
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/cart/item', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            artworkId: item.artworkId,
+            type: item.type,
+            quantity,
+          }),
+        });
+
+        const data = await parseCartResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              'Failed to update cart quantity.'
+          );
+        }
+
+        setItems(
+          transformCartItems(data.cart?.items ?? [])
+        );
+      } catch (error) {
+        console.error(
+          'Failed to update cart quantity:',
+          error
+        );
+
         await loadCart();
       }
     },
@@ -379,11 +463,14 @@ export function CartProvider({
       value={{
         items,
         count,
+        loading,
+        removingItemId,
         subtotal,
         shipping,
         total,
         addItem,
         removeItem,
+        updateQuantity,
         clearCart,
         isInCart,
       }}

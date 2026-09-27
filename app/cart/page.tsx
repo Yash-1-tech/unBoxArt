@@ -6,6 +6,8 @@ import {
   ShoppingBag,
   ArrowRight,
   Loader2,
+  Minus,
+  Plus,
 } from 'lucide-react';
 
 import { useCart } from '@/lib/CartContext';
@@ -17,6 +19,7 @@ export default function CartPage() {
     loading,
     removingItemId,
     removeItem,
+    updateQuantity,
     subtotal,
     shipping,
     total,
@@ -74,6 +77,7 @@ export default function CartPage() {
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10">
+        {/* Cart items */}
         <div className="space-y-4">
           {items.map((item) => {
             const isRemoving =
@@ -125,8 +129,8 @@ export default function CartPage() {
                       : 'Original Painting'}
                   </p>
 
-                  {/* Price / quantity / shipping */}
-                  <div className="flex items-center justify-between mt-2">
+                  {/* Price and quantity */}
+                  <div className="flex items-end justify-between mt-3">
                     <div>
                       <p className="text-sm font-bold text-gray-900">
                         ₹
@@ -135,11 +139,45 @@ export default function CartPage() {
                         )}
                       </p>
 
-                      {item.quantity > 1 && (
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          Quantity: {item.quantity}
-                        </p>
-                      )}
+                      {/* Quantity controls */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(
+                              item.id,
+                              item.quantity - 1
+                            )
+                          }
+                          disabled={
+                            item.quantity <= 1 ||
+                            isRemoving
+                          }
+                          className="w-7 h-7 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          aria-label={`Decrease quantity of ${item.title}`}
+                        >
+                          <Minus size={13} />
+                        </button>
+
+                        <span className="w-7 text-center text-sm font-medium text-gray-900">
+                          {item.quantity}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(
+                              item.id,
+                              item.quantity + 1
+                            )
+                          }
+                          disabled={isRemoving}
+                          className="w-7 h-7 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          aria-label={`Increase quantity of ${item.title}`}
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
                     </div>
 
                     <p className="text-xs text-gray-400">
@@ -174,6 +212,7 @@ export default function CartPage() {
           })}
         </div>
 
+        {/* Order summary */}
         <div className="border border-gray-100 p-6 self-start sticky top-24">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-900 mb-5">
             Order Summary
