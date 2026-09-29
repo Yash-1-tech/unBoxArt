@@ -34,6 +34,7 @@ export interface IOrder extends Document {
   razorpayOrderId?: string;
   paymentReference?: string;
   orderStatus: 'placed' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
+  inventoryAdjusted: boolean;
   trackingNumber?: string;
   notes?: string;
   createdAt: Date;
@@ -74,6 +75,7 @@ const OrderSchema = new Schema<IOrder>(
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
     razorpayOrderId: String,
     paymentReference: String,
+    inventoryAdjusted: {type: Boolean,default: false,},
     orderStatus: { type: String, enum: ['placed', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'], default: 'placed' },
     trackingNumber: String,
     notes: String,

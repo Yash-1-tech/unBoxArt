@@ -35,6 +35,33 @@ const ALLOWED_PAYMENT_METHODS = [
   'cod',
 ] as const;
 
+type ServerOrderItem = {
+  artwork: mongoose.Types.ObjectId;
+  type: 'original' | 'digital_print';
+  quantity: number;
+  price: number;
+};
+
+type ReservedStock = {
+  artwork: mongoose.Types.ObjectId;
+  quantity: number;
+};
+
+async function releaseReservedStock(
+  reservations: ReservedStock[]
+) {
+  for (const reservation of reservations) {
+    await Artwork.findByIdAndUpdate(
+      reservation.artwork,
+      {
+        $inc: {
+          stock: reservation.quantity,
+        },
+      }
+    );
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -48,7 +75,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    if (session.user.role !== 'buyer') {
+    const sessionUser = session.user;
+
+    if (sessionUser.role !== 'buyer') {
       return NextResponse.json(
         { error: 'Only buyers can view orders' },
         { status: 403 }
@@ -56,22 +85,25 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+
     const requestedBuyerId =
       searchParams.get('buyerId');
 
-    // Never allow one buyer to request another buyer's orders.
     if (
       requestedBuyerId &&
-      requestedBuyerId !== session.user.id
+      requestedBuyerId !== sessionUser.id
     ) {
       return NextResponse.json(
-        { error: 'You can only view your own orders' },
+        {
+          error:
+            'You can only view your own orders',
+        },
         { status: 403 }
       );
     }
 
     const orders = await Order.find({
-      buyer: session.user.id,
+      buyer: sessionUser.id,
     })
       .populate({
         path: 'items.artwork',
@@ -96,6 +128,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const reservedOriginals: ReservedStock[] = [];
+
   try {
     await connectDB();
 
@@ -108,7 +142,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (session.user.role !== 'buyer') {
+    const sessionUser = session.user;
+
+    if (sessionUser.role !== 'buyer') {
       return NextResponse.json(
         { error: 'Only buyers can place orders' },
         { status: 403 }
@@ -123,13 +159,12 @@ export async function POST(req: NextRequest) {
     } = body;
 
     /*
-     * The browser may send items/buyer information,
-     * but we deliberately do NOT trust them.
+     * The browser may send buyer/items/prices,
+     * but none of those values are trusted.
      *
-     * Buyer comes from the authenticated session.
-     * Items, prices and quantities come from MongoDB.
+     * Buyer comes from the session.
+     * Items, quantities and prices come from MongoDB.
      */
-
     if (!shippingAddress || !paymentMethod) {
       return NextResponse.json(
         {
@@ -174,7 +209,9 @@ export async function POST(req: NextRequest) {
 
     if (
       typeof shippingAddress.pincode !== 'string' ||
-      !/^\d{6}$/.test(shippingAddress.pincode)
+      !/^\d{6}$/.test(
+        shippingAddress.pincode
+      )
     ) {
       return NextResponse.json(
         { error: 'Invalid 6-digit pincode' },
@@ -183,7 +220,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buyer = await User.findById(
-      session.user.id
+      sessionUser.id
     )
       .select('name email role')
       .lean();
@@ -197,7 +234,10 @@ export async function POST(req: NextRequest) {
 
     if (buyer.role !== 'buyer') {
       return NextResponse.json(
-        { error: 'Only buyer accounts can place orders' },
+        {
+          error:
+            'Only buyer accounts can place orders',
+        },
         { status: 403 }
       );
     }
@@ -206,7 +246,7 @@ export async function POST(req: NextRequest) {
      * Read the actual cart from MongoDB.
      */
     const cart = await Cart.findOne({
-      user: session.user.id,
+      user: sessionUser.id,
     }).lean();
 
     if (!cart || cart.items.length === 0) {
@@ -227,7 +267,8 @@ export async function POST(req: NextRequest) {
     const artworkDocs = await Artwork.find({
       _id: {
         $in: artworkIds.map(
-          (id) => new mongoose.Types.ObjectId(id)
+          (id) =>
+            new mongoose.Types.ObjectId(id)
         ),
       },
     })
@@ -241,14 +282,15 @@ export async function POST(req: NextRequest) {
       ])
     );
 
-    /*
-     * Build the order items using ONLY server-side
-     * artwork/cart information.
-     */
-    const orderItems = [];
+    const orderItems: ServerOrderItem[] = [];
+
     let subtotal = 0;
     let shippingCost = 0;
 
+    /*
+     * First validate the complete cart using current
+     * database values.
+     */
     for (const cartItem of cart.items) {
       const artwork =
         artworkMap.get(
@@ -268,13 +310,16 @@ export async function POST(req: NextRequest) {
       if (!artwork.isAvailable) {
         return NextResponse.json(
           {
-            error: `"${artwork.title}" is currently unavailable`,
+            error:
+              `"${artwork.title}" is currently unavailable`,
           },
           { status: 400 }
         );
       }
 
-      const quantity = Number(cartItem.quantity);
+      const quantity = Number(
+        cartItem.quantity
+      );
 
       if (
         !Number.isInteger(quantity) ||
@@ -282,7 +327,8 @@ export async function POST(req: NextRequest) {
       ) {
         return NextResponse.json(
           {
-            error: `Invalid quantity for "${artwork.title}"`,
+            error:
+              `Invalid quantity for "${artwork.title}"`,
           },
           { status: 400 }
         );
@@ -293,14 +339,17 @@ export async function POST(req: NextRequest) {
 
       if (cartItem.type === 'original') {
         /*
-         * Re-check current physical stock.
+         * Current stock check.
          */
         if (quantity > artwork.stock) {
           return NextResponse.json(
             {
-              error: `"${artwork.title}" only has ${artwork.stock} original${
-                artwork.stock === 1 ? '' : 's'
-              } available`,
+              error:
+                `"${artwork.title}" only has ${artwork.stock} original${
+                  artwork.stock === 1
+                    ? ''
+                    : 's'
+                } available`,
             },
             { status: 400 }
           );
@@ -311,7 +360,9 @@ export async function POST(req: NextRequest) {
         );
 
         itemShipping =
-          Number(artwork.shippingCost) || 0;
+          Number(
+            artwork.shippingCost
+          ) || 0;
       } else {
         /*
          * Digital prints do not consume original stock.
@@ -321,7 +372,8 @@ export async function POST(req: NextRequest) {
         ) {
           return NextResponse.json(
             {
-              error: `Digital print is not available for "${artwork.title}"`,
+              error:
+                `Digital print is not available for "${artwork.title}"`,
             },
             { status: 400 }
           );
@@ -334,10 +386,14 @@ export async function POST(req: NextRequest) {
         itemShipping = 0;
       }
 
-      if (!Number.isFinite(price) || price < 0) {
+      if (
+        !Number.isFinite(price) ||
+        price < 0
+      ) {
         return NextResponse.json(
           {
-            error: `Invalid price for "${artwork.title}"`,
+            error:
+              `Invalid price for "${artwork.title}"`,
           },
           { status: 400 }
         );
@@ -361,8 +417,11 @@ export async function POST(req: NextRequest) {
     }
 
     const discount = 0;
+
     const total =
-      subtotal + shippingCost - discount;
+      subtotal +
+      shippingCost -
+      discount;
 
     /*
      * Server-side COD restriction.
@@ -381,39 +440,114 @@ export async function POST(req: NextRequest) {
     }
 
     /*
-     * Create the order using server-calculated data.
+     * For manual/COD orders, reserve the original
+     * artwork stock NOW.
+     *
+     * Razorpay orders do NOT reserve stock here.
+     * Razorpay stock is reduced only after successful
+     * payment verification.
+     */
+    if (paymentMethod !== 'razorpay') {
+      for (const item of orderItems) {
+        if (item.type !== 'original') {
+          continue;
+        }
+
+        const updatedArtwork =
+          await Artwork.findOneAndUpdate(
+            {
+              _id: item.artwork,
+              isAvailable: true,
+              stock: {
+                $gte: item.quantity,
+              },
+            },
+            {
+              $inc: {
+                stock: -item.quantity,
+              },
+            },
+            {
+              new: true,
+            }
+          );
+
+        if (!updatedArtwork) {
+          throw new Error(
+            `Insufficient stock for "${artworkMap.get(
+              item.artwork.toString()
+            )?.title || 'one of the artworks'}"`
+          );
+        }
+
+        reservedOriginals.push({
+          artwork: item.artwork,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    /*
+     * Create the order using ONLY server-calculated data.
      */
     const order = await Order.create({
-      buyer: session.user.id,
+      buyer: sessionUser.id,
+
       items: orderItems,
+
       shippingAddress: {
-        fullName: shippingAddress.fullName,
-        phone: shippingAddress.phone,
+        fullName:
+          shippingAddress.fullName,
+
+        phone:
+          shippingAddress.phone,
+
         addressLine1:
           shippingAddress.addressLine1,
+
         addressLine2:
-          shippingAddress.addressLine2 || undefined,
-        city: shippingAddress.city,
-        state: shippingAddress.state,
-        pincode: shippingAddress.pincode,
-        country: shippingAddress.country,
+          shippingAddress.addressLine2 ||
+          undefined,
+
+        city:
+          shippingAddress.city,
+
+        state:
+          shippingAddress.state,
+
+        pincode:
+          shippingAddress.pincode,
+
+        country:
+          shippingAddress.country,
       },
+
       subtotal,
+
       shippingCost,
+
       discount,
+
       total,
+
       paymentMethod,
-      paymentStatus: 'pending',
-      orderStatus: 'placed',
+
+      paymentStatus:
+        'pending',
+      
+      inventoryAdjusted:
+        paymentMethod !== 'razorpay',
+
+      orderStatus:
+        'placed',
     });
 
     /*
-     * Send emails after the order is created.
-     * Email failure must never break the order.
+     * Send emails after successful order creation.
      */
     try {
-      const emailItems = orderItems.map(
-        (item) => {
+      const emailItems =
+        orderItems.map((item) => {
           const artwork =
             artworkMap.get(
               item.artwork.toString()
@@ -423,11 +557,14 @@ export async function POST(req: NextRequest) {
             title:
               artwork?.title ||
               'Artwork',
-            price: item.price,
-            type: item.type,
+
+            price:
+              item.price,
+
+            type:
+              item.type,
           };
-        }
-      );
+        });
 
       sendOrderConfirmationEmail(
         buyer.email,
@@ -440,7 +577,9 @@ export async function POST(req: NextRequest) {
       const notifiedArtists =
         new Set<string>();
 
-      for (const artwork of artworkDocs) {
+      for (
+        const artwork of artworkDocs
+      ) {
         const artist =
           artwork.artist as
             | {
@@ -463,7 +602,8 @@ export async function POST(req: NextRequest) {
 
           sendNewOrderNotificationEmail(
             artist.email,
-            artist.name || 'Artist',
+            artist.name ||
+              'Artist',
             order.orderNumber,
             artwork.title,
             buyer.name,
@@ -483,7 +623,29 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (err: unknown) {
-    console.error('[POST /api/orders]', err);
+    console.error(
+      '[POST /api/orders]',
+      err
+    );
+
+    /*
+     * If we reserved stock for a manual/COD order
+     * but order creation failed, restore it.
+     */
+    if (
+      reservedOriginals.length > 0
+    ) {
+      try {
+        await releaseReservedStock(
+          reservedOriginals
+        );
+      } catch (rollbackError) {
+        console.error(
+          'Failed to restore reserved stock:',
+          rollbackError
+        );
+      }
+    }
 
     const message =
       err instanceof Error
