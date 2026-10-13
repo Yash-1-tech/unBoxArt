@@ -236,6 +236,8 @@ export async function POST(req: NextRequest) {
 
           currentOrder.paymentReference =
             razorpay_payment_id;
+          
+          currentOrder.inventoryAdjusted = true;
 
           currentOrder.orderStatus =
             'confirmed';
