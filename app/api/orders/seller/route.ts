@@ -1,24 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { getIronSession } from 'iron-session';
+
 import { connectDB } from '@/lib/db';
 import Order from '@/models/Order';
 import Artwork from '@/models/Artwork';
 
-// GET /api/orders/seller?artistId=xxx
+import {
+  sessionOptions,
+  type SessionData,
+} from '@/lib/session';
+
+async function getSession() {
+  const cookieStore = await cookies();
+
+  return getIronSession<SessionData>(
+    cookieStore,
+    sessionOptions
+  );
+}
+
+// GET /api/orders/seller
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
-    const { searchParams } = new URL(req.url);
-    const artistId = searchParams.get('artistId');
 
-    if (!artistId) {
-      return NextResponse.json({ error: 'artistId is required' }, { status: 400 });
+    // Require an authenticated session.
+    const session = await getSession();
+
+    if (!session.user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
     }
 
-    // Find all artworks by this artist
-    const artworks = await Artwork.find({ artist: artistId }).select('_id title').lean();
-    const artworkIds = artworks.map((a) => a._id);
+    const sessionUser = session.user;
 
-    // Find all orders containing those artworks
+    // Only artist accounts can access seller orders.
+    if (sessionUser.role !== 'artist') {
+      return NextResponse.json(
+        { error: 'Only artists can view seller orders' },
+        { status: 403 }
+      );
+    }
+
+    /*
+     * The session is the source of truth for artist identity.
+     * If a client supplies artistId, ensure it matches.
+     */
+    const { searchParams } = new URL(req.url);
+    const requestedArtistId =
+      searchParams.get('artistId');
+
+    if (
+      requestedArtistId &&
+      requestedArtistId !== sessionUser.id
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'You are not authorized to view these sales',
+        },
+        { status: 403 }
+      );
+    }
+
+    // Find artworks belonging to the authenticated artist.
+    const artworks = await Artwork.find({
+      artist: sessionUser.id,
+    })
+      .select('_id title')
+      .lean();
+
+    const artworkIds = artworks.map((artwork) =>
+      artwork._id.toString()
+    );
+
+    if (artworkIds.length === 0) {
+      return NextResponse.json({ orders: [] });
+    }
+
+    // Find orders containing this artist's artworks.
     const orders = await Order.find({
       'items.artwork': { $in: artworkIds },
     })
@@ -30,17 +93,36 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Filter items to only show THIS artist's artworks
-    const filteredOrders = orders.map((order) => ({
-      ...order,
-      items: order.items.filter((item: any) =>
-        artworkIds.some((id) => id.toString() === item.artwork?._id?.toString())
-      ),
-    }));
+    const artistArtworkIds = new Set(artworkIds);
 
-    return NextResponse.json({ orders: filteredOrders });
+    // Only return the items belonging to this artist.
+    const filteredOrders = orders
+      .map((order) => ({
+        ...order,
+        items: order.items.filter((item: any) => {
+          const artworkId =
+            item.artwork?._id?.toString();
+
+          return (
+            artworkId &&
+            artistArtworkIds.has(artworkId)
+          );
+        }),
+      }))
+      .filter((order) => order.items.length > 0);
+
+    return NextResponse.json({
+      orders: filteredOrders,
+    });
   } catch (err) {
-    console.error('[GET /api/orders/seller]', err);
-    return NextResponse.json({ error: 'Failed to fetch seller orders' }, { status: 500 });
+    console.error(
+      '[GET /api/orders/seller]',
+      err
+    );
+
+    return NextResponse.json(
+      { error: 'Failed to fetch seller orders' },
+      { status: 500 }
+    );
   }
 }
