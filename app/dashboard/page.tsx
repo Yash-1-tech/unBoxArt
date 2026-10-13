@@ -69,6 +69,23 @@ interface Artwork {
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
+
+  useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    const requestedSection = params.get('section');
+
+    if (
+      requestedSection &&
+      NAV_ITEMS.some(
+        (item) => item.id === requestedSection
+      )
+    ) {
+      setActiveSection(requestedSection);
+    }
+  }, []);
   const [profileData, setProfileData] = useState({
     fullName: user?.name || '',
     email: user?.email || '',

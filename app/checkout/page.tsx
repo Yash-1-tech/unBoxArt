@@ -204,14 +204,9 @@ export default function CheckoutPage() {
         await handleRazorpayPayment(mongoOrder);
       }
 
-      // For COD, UPI and Net Banking, the order has already
-      // been created with pending payment status.
-
-      // Step 3: Clear the cart after successful checkout
       await clearCart();
 
-      // Step 4: Navigate to the success page
-      router.push('/orders/success');
+      router.push(`/orders/success?orderId=${encodeURIComponent(mongoOrder._id)}`);
     } catch (err: any) {
       if (err.message === 'Payment cancelled') {
         setError('Payment was cancelled. Your order was not placed.');
