@@ -66,6 +66,36 @@ interface Artwork {
   createdAt?: string;
 }
 
+interface OrderArtwork {
+  _id?: string;
+  title?: string;
+  images?: string[];
+  code?: string;
+  medium?: string;
+}
+
+interface DashboardOrderItem {
+  _id?: string;
+  artwork: OrderArtwork | string | null;
+  type: 'original' | 'digital_print';
+  quantity: number;
+  price: number;
+}
+
+interface DashboardOrder {
+  _id: string;
+  orderNumber: string;
+  items: DashboardOrderItem[];
+  subtotal: number;
+  shippingCost: number;
+  discount: number;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  orderStatus: string;
+  createdAt?: string;
+}
+
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
@@ -100,6 +130,9 @@ export default function DashboardPage() {
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [artworksLoading, setArtworksLoading] = useState(false);
   const [artworksError, setArtworksError] = useState('');
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState('');
   const [editingArtwork, setEditingArtwork] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -145,6 +178,60 @@ export default function DashboardPage() {
       }
     };
     fetchArtworks();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'buyer') {
+      setOrders([]);
+      setOrdersLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchOrders() {
+      setOrdersLoading(true);
+      setOrdersError('');
+
+      try {
+        const response = await fetch('/api/orders', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Failed to load your orders'
+          );
+        }
+
+        if (!cancelled) {
+          setOrders(
+            Array.isArray(data.orders) ? data.orders : []
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setOrdersError(
+            error instanceof Error
+              ? error.message
+              : 'Failed to load your orders'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setOrdersLoading(false);
+        }
+      }
+    }
+
+    void fetchOrders();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
 
@@ -1034,31 +1121,197 @@ export default function DashboardPage() {
 
           {activeSection === 'orders' && (
             <div>
-
               <h2 className="text-base font-semibold text-gray-900 mb-6">
-                Orders
+                My Orders
               </h2>
 
-              <div className="text-sm text-gray-500 text-center py-16 border border-dashed border-gray-200">
+              {user?.role !== 'buyer' ? (
+                <div className="text-sm text-gray-500 text-center py-16 border border-dashed border-gray-200">
+                  Order history is available to buyer accounts.
+                </div>
+              ) : ordersLoading ? (
+                <div className="text-sm text-gray-500 text-center py-16 border border-gray-100">
+                  Loading your orders...
+                </div>
+              ) : ordersError ? (
+                <div className="text-center py-12 border border-red-100 bg-red-50">
+                  <p className="text-sm text-red-600 mb-4">
+                    {ordersError}
+                  </p>
 
-                No orders yet.
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="text-sm text-[#e63329] hover:underline"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center py-16 border border-dashed border-gray-200">
+                  <ShoppingBag
+                    size={30}
+                    className="mx-auto text-gray-300 mb-3"
+                  />
 
-                {' '}
+                  <p className="mb-3">
+                    You haven't placed any orders yet.
+                  </p>
 
-                <Link
-                  href="/art-gallery"
-                  className="text-[#e63329] hover:underline"
-                >
-                  Browse artwork
-                </Link>
+                  <Link
+                    href="/art-gallery"
+                    className="text-[#e63329] hover:underline"
+                  >
+                    Browse artwork
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {orders.map((order) => (
+                    <article
+                      key={order._id}
+                      className="border border-gray-200 bg-white"
+                    >
+                      {/* Order header */}
+                      <div className="p-4 bg-gray-50 border-b border-gray-100">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <p className="text-xs text-gray-500">
+                              Order number
+                            </p>
 
-                {' '}or wait for sales to come in.
+                            <p className="text-sm font-semibold text-gray-900 mt-1">
+                              {order.orderNumber}
+                            </p>
 
-              </div>
+                            {order.createdAt && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                Placed on{' '}
+                                {new Date(
+                                  order.createdAt
+                                ).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                            )}
+                          </div>
 
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full">
+                              {order.orderStatus.replace(/_/g, ' ')}
+                            </span>
+
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full ${
+                                order.paymentStatus === 'paid'
+                                  ? 'bg-green-50 text-green-700'
+                                  : order.paymentStatus === 'failed'
+                                    ? 'bg-red-50 text-red-700'
+                                    : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              Payment: {order.paymentStatus}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Ordered artworks */}
+                      <div className="p-4 space-y-4">
+                        {order.items.map((item, index) => {
+                          const artwork =
+                            typeof item.artwork === 'object' &&
+                            item.artwork !== null
+                              ? item.artwork
+                              : null;
+
+                          return (
+                            <div
+                              key={
+                                item._id ||
+                                `${artwork?._id || index}-${item.type}`
+                              }
+                              className="flex gap-3 items-center"
+                            >
+                              <div className="w-16 h-16 bg-gray-100 flex-shrink-0 overflow-hidden">
+                                {artwork?.images?.[0] ? (
+                                  <img
+                                    src={artwork.images[0]}
+                                    alt={artwork.title || 'Artwork'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xl">
+                                    🎨
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                {artwork?._id ? (
+                                  <Link
+                                    href={`/artwork/${artwork._id}`}
+                                    className="text-sm font-medium text-gray-900 hover:text-[#e63329]"
+                                  >
+                                    {artwork.title || 'Artwork'}
+                                  </Link>
+                                ) : (
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {artwork?.title || 'Artwork'}
+                                  </p>
+                                )}
+
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {item.type === 'digital_print'
+                                    ? 'Digital Print'
+                                    : 'Original Painting'}
+                                </p>
+
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Quantity: {item.quantity}
+                                </p>
+                              </div>
+
+                              <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                                {formatPrice(
+                                  item.price * item.quantity
+                                )}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Order total */}
+                      <div className="p-4 border-t border-gray-100 flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            Payment method: {order.paymentMethod}
+                          </p>
+
+                          <p className="text-xs text-gray-400 mt-1">
+                            Shipping: {formatPrice(order.shippingCost)}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">
+                            Order total
+                          </p>
+
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatPrice(order.total)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-
 
           {activeSection === 'payment' && (
             <div>
