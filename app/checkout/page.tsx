@@ -33,7 +33,7 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  const [paymentMethod, setPaymentMethod] = useState('razorpay');
+  const [paymentMethod, setPaymentMethod] = useState('cod');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [razorpayAvailable, setRazorpayAvailable] = useState(false);
@@ -53,9 +53,11 @@ export default function CheckoutPage() {
   }, [user]);
 
   useEffect(() => {
-    // Check if Razorpay keys are configured
     if (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) {
       setRazorpayAvailable(true);
+      setPaymentMethod('razorpay');
+    } else {
+      setPaymentMethod('cod');
     }
   }, []);
 
@@ -171,14 +173,6 @@ export default function CheckoutPage() {
     });
   };
 
-  // Handle COD / manual payment
-  const handleManualPayment = async (mongoOrder: any) => {
-    await fetch(`/api/orders/${mongoOrder._id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentStatus: 'pending', orderStatus: 'placed' }),
-    });
-  };
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,18 +190,27 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
-      // Step 1: Create order in MongoDB
+      // Step 1: Create the MongoDB order
       const mongoOrder = await createMongoOrder();
 
-      // Step 2: Handle payment
-      if (paymentMethod === 'razorpay' && razorpayAvailable) {
+      // Step 2: Process online payment when selected
+      if (paymentMethod === 'razorpay') {
+        if (!razorpayAvailable) {
+          throw new Error(
+            'Razorpay is not configured. Please select another payment method.'
+          );
+        }
+
         await handleRazorpayPayment(mongoOrder);
-      } else {
-        await handleManualPayment(mongoOrder);
       }
 
-      // Step 3: Success
-      clearCart();
+      // For COD, UPI and Net Banking, the order has already
+      // been created with pending payment status.
+
+      // Step 3: Clear the cart after successful checkout
+      await clearCart();
+
+      // Step 4: Navigate to the success page
       router.push('/orders/success');
     } catch (err: any) {
       if (err.message === 'Payment cancelled') {

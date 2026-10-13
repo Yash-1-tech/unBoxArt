@@ -83,12 +83,14 @@ const OrderSchema = new Schema<IOrder>(
   { timestamps: true }
 );
 
-OrderSchema.pre('save', async function (next) {
+OrderSchema.pre('validate', async function () {
   if (!this.orderNumber) {
-    const count = await mongoose.models.Order.countDocuments();
-    this.orderNumber = `UBA-${Date.now()}-${String(count + 1).padStart(4, '0')}`;
+    const count =
+      await mongoose.models.Order.countDocuments();
+
+    this.orderNumber =
+      `UBA-${Date.now()}-${String(count + 1).padStart(4, '0')}`;
   }
-  next();
 });
 
 const Order: Model<IOrder> =

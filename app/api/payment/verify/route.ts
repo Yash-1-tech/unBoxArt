@@ -111,9 +111,6 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    /*
-     * Load the order and verify ownership.
-     */
     const order = await Order.findById(orderId);
 
     if (!order) {
@@ -149,10 +146,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * Make sure the Razorpay payment belongs to
-     * the Razorpay order we created for THIS order.
-     */
     if (
       !order.razorpayOrderId ||
       order.razorpayOrderId !==
@@ -167,11 +160,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * Idempotency:
-     * If this order was already successfully verified,
-     * don't decrement stock a second time.
-     */
+
     if (
       order.paymentStatus === 'paid'
     ) {
@@ -184,10 +173,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    /*
-     * Decrement original artwork stock and mark the
-     * order paid inside one MongoDB transaction.
-     */
     const dbSession =
       await mongoose.startSession();
 
@@ -219,12 +204,6 @@ export async function POST(req: NextRequest) {
               continue;
             }
 
-            /*
-             * Atomic stock check + decrement.
-             *
-             * This prevents two buyers from both
-             * successfully purchasing the last item.
-             */
             const updatedArtwork =
               await Artwork.findOneAndUpdate(
                 {

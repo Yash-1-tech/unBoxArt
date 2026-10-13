@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
      */
     if (
       mongoOrder.buyer.toString() !==
-      session.user.sessionUser.id
+      session.user.id
     ) {
       return NextResponse.json(
         { error: 'You are not authorized to pay for this order' },
