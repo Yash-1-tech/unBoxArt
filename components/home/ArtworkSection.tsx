@@ -10,6 +10,7 @@ interface Artwork {
   medium: string;
   dimensions: { width: number; height: number; unit: string };
   originalPrice: number;
+  stock?: number;
   images: string[];
   likes: number;
   views: number;
@@ -76,6 +77,7 @@ export default function ArtworkSection({
                 medium={art.medium}
                 dimensions={`${art.dimensions?.width}"×${art.dimensions?.height}"`}
                 price={art.originalPrice}
+                stock={art.stock}
                 image={art.images?.[0] || ''}
                 likes={art.likes}
                 views={art.views}
