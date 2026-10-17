@@ -45,13 +45,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    /*
-     * The session is the source of truth for artist identity.
-     * If a client supplies artistId, ensure it matches.
-     */
+    // The session is the source of truth for artist identity.
     const { searchParams } = new URL(req.url);
-    const requestedArtistId =
-      searchParams.get('artistId');
+    const requestedArtistId = searchParams.get('artistId');
 
     if (
       requestedArtistId &&
@@ -59,8 +55,7 @@ export async function GET(req: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          error:
-            'You are not authorized to view these sales',
+          error: 'You are not authorized to view these sales',
         },
         { status: 403 }
       );
@@ -95,30 +90,41 @@ export async function GET(req: NextRequest) {
 
     const artistArtworkIds = new Set(artworkIds);
 
-    // Only return the items belonging to this artist.
+    // Keep only this artist's items and calculate their item subtotal.
     const filteredOrders = orders
-      .map((order) => ({
-        ...order,
-        items: order.items.filter((item: any) => {
-          const artworkId =
-            item.artwork?._id?.toString();
+      .map((order) => {
+        const artistItems = order.items.filter((item: any) => {
+          const artworkId = item.artwork?._id?.toString();
 
           return (
             artworkId &&
             artistArtworkIds.has(artworkId)
           );
-        }),
-      }))
+        });
+
+        const artistSubtotal = artistItems.reduce(
+          (sum: number, item: any) => {
+            const price = Number(item.price) || 0;
+            const quantity = Number(item.quantity) || 0;
+
+            return sum + price * quantity;
+          },
+          0
+        );
+
+        return {
+          ...order,
+          items: artistItems,
+          artistSubtotal,
+        };
+      })
       .filter((order) => order.items.length > 0);
 
     return NextResponse.json({
       orders: filteredOrders,
     });
   } catch (err) {
-    console.error(
-      '[GET /api/orders/seller]',
-      err
-    );
+    console.error('[GET /api/orders/seller]', err);
 
     return NextResponse.json(
       { error: 'Failed to fetch seller orders' },

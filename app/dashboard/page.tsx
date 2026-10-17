@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { User, MessageSquare, Image, ShoppingBag, CreditCard, Settings, LogOut, Plus, CheckCircle, Upload, Edit3, Trash2, Star, Package,} from 'lucide-react';
+import { User, MessageSquare, Image, ShoppingBag, CreditCard, Settings, LogOut, Plus, CheckCircle, Upload, Edit3, Trash2, Star, Package,Truck} from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import SellerOrders from '@/components/dashboard/SellerOrders';
 
@@ -93,6 +93,7 @@ interface DashboardOrder {
   paymentMethod: string;
   paymentStatus: string;
   orderStatus: string;
+  trackingNumber?: string;
   createdAt?: string;
 }
 
@@ -1199,9 +1200,23 @@ export default function DashboardPage() {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full">
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full capitalize ${
+                                order.orderStatus === 'delivered'
+                                  ? 'bg-green-50 text-green-700'
+                                  : order.orderStatus === 'shipped'
+                                    ? 'bg-amber-50 text-amber-700'
+                                    : order.orderStatus === 'cancelled'
+                                      ? 'bg-red-50 text-red-700'
+                                      : order.orderStatus === 'returned'
+                                        ? 'bg-gray-100 text-gray-700'
+                                        : order.orderStatus === 'confirmed'
+                                          ? 'bg-purple-50 text-purple-700'
+                                          : 'bg-blue-50 text-blue-700'
+                              }`}
+                            >
                               {order.orderStatus.replace(/_/g, ' ')}
-                            </span>
+                            </span> 
 
                             <span
                               className={`text-xs px-2.5 py-1 rounded-full ${
@@ -1217,7 +1232,104 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       </div>
+                    {/* Order progress */}
+                    {['cancelled', 'returned'].includes(order.orderStatus) ? (
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <p
+                          className={`text-sm font-medium ${
+                            order.orderStatus === 'cancelled'
+                              ? 'text-red-600'
+                              : 'text-gray-600'
+                          }`}
+                        >
+                          Order {order.orderStatus}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="px-4 py-4 border-b border-gray-100">
+                        <p className="text-xs font-semibold text-gray-700 mb-3">
+                          Order progress
+                        </p>
 
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { status: 'placed', label: 'Placed' },
+                            { status: 'confirmed', label: 'Confirmed' },
+                            { status: 'shipped', label: 'Shipped' },
+                            { status: 'delivered', label: 'Delivered' },
+                          ].map((step, index) => {
+                            const steps = [
+                              'placed',
+                              'confirmed',
+                              'shipped',
+                              'delivered',
+                            ];
+                            const currentIndex = steps.indexOf(order.orderStatus);
+                            const isComplete = currentIndex >= index;
+                            const isCurrent = currentIndex === index;
+
+                            return (
+                              <div key={step.status}>
+                                <div
+                                  className={`h-1.5 rounded-full ${
+                                    isComplete ? 'bg-[#e63329]' : 'bg-gray-200'
+                                  }`}
+                                />
+
+                                <p
+                                  className={`mt-2 text-[10px] sm:text-xs ${
+                                    isCurrent
+                                      ? 'text-[#e63329] font-semibold'
+                                      : isComplete
+                                        ? 'text-gray-700'
+                                        : 'text-gray-400'
+                                  }`}
+                                >
+                                  {step.label}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <p className="text-xs text-gray-500 mt-3">
+                          {order.orderStatus === 'placed' &&
+                            'Your order has been placed and is awaiting confirmation.'}
+                          {order.orderStatus === 'confirmed' &&
+                            'Your order is confirmed and awaiting shipment.'}
+                          {order.orderStatus === 'shipped' &&
+                            'Your artwork is on its way.'}
+                          {order.orderStatus === 'delivered' &&
+                            'Your artwork has been delivered.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Shipment tracking */}
+                    {order.trackingNumber ? (
+                      <div className="mx-4 my-4 p-3 border border-blue-100 bg-blue-50 flex items-start gap-3">
+                        <Truck size={18} className="text-blue-700 shrink-0 mt-0.5" />
+
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-blue-900">
+                            Tracking number
+                          </p>
+                          <p className="text-sm text-blue-800 mt-1 break-all">
+                            {order.trackingNumber}
+                          </p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Use this number on your delivery carrier's website to check
+                            shipment updates.
+                          </p>
+                        </div>
+                      </div>
+                    ) : order.orderStatus === 'shipped' ? (
+                      <div className="mx-4 my-4 p-3 border border-amber-100 bg-amber-50">
+                        <p className="text-xs text-amber-800">
+                          Your order has shipped. Tracking details are not available yet.
+                        </p>
+                      </div>
+                    ) : null}
                       {/* Ordered artworks */}
                       <div className="p-4 space-y-4">
                         {order.items.map((item, index) => {

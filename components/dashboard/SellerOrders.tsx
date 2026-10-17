@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Package, Truck, Clock, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
+import {
+  Package,
+  Truck,
+  Clock,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react';
 
 interface OrderItem {
   artwork: {
@@ -30,6 +36,7 @@ interface Order {
     country: string;
   };
   total: number;
+  artistSubtotal: number;
   paymentStatus: string;
   orderStatus: string;
   trackingNumber?: string;
@@ -57,32 +64,112 @@ export default function SellerOrders({ artistId }: { artistId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>({});
+  const [trackingInputs, setTrackingInputs] = useState<Record<string, string>>(
+    {}
+  );
 
   useEffect(() => {
-    if (!artistId) return;
-    fetch(`/api/orders/seller?artistId=${artistId}`)
-      .then((res) => res.json())
-      .then((data) => setOrders(data.orders || []))
-      .catch(() => setError('Failed to load orders'))
-      .finally(() => setLoading(false));
+    if (!artistId) {
+      setLoading(false);
+      setError('Artist account could not be identified.');
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadOrders = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const res = await fetch(
+          `/api/orders/seller?artistId=${encodeURIComponent(artistId)}`
+        );
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load orders.');
+        }
+
+        if (!cancelled) {
+          setOrders(data.orders || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to load orders.'
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadOrders();
+
+    return () => {
+      cancelled = true;
+    };
   }, [artistId]);
 
-  const updateOrderStatus = async (orderId: string, updates: Record<string, string>) => {
+  const updateOrderStatus = async (
+    orderId: string,
+    updates: Record<string, string>
+  ) => {
+    setError('');
+
+    if (
+      updates.orderStatus === 'shipped' &&
+      !updates.trackingNumber?.trim()
+    ) {
+      setError('Enter a tracking number before marking the order as shipped.');
+      return;
+    }
+
     setUpdatingId(orderId);
+
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error('Update failed');
-      const updated = await res.json();
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Failed to update order.');
+      }
+
+      const updatedOrder = data.order || data;
+
       setOrders((prev) =>
-        prev.map((o) => (o._id === orderId ? { ...o, ...updated } : o))
+        prev.map((order) =>
+          order._id === orderId
+            ? {
+                ...order,
+                ...updatedOrder,
+                ...(updates.orderStatus
+                  ? { orderStatus: updates.orderStatus }
+                  : {}),
+                ...(updates.trackingNumber
+                  ? { trackingNumber: updates.trackingNumber.trim() }
+                  : {}),
+              }
+            : order
+        )
       );
-    } catch {
-      setError('Failed to update order');
+
+      if (updates.orderStatus === 'shipped') {
+        setTrackingInputs((prev) => ({
+          ...prev,
+          [orderId]: updates.trackingNumber.trim(),
+        }));
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to update order.'
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -96,145 +183,241 @@ export default function SellerOrders({ artistId }: { artistId: string }) {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center gap-2 text-red-500 text-sm py-8">
-        <AlertCircle size={16} /> {error}
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-base font-semibold text-gray-900">My Sales</h2>
-        <span className="text-xs text-gray-400">{orders.length} order{orders.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-gray-400">
+          {orders.length} order{orders.length !== 1 ? 's' : ''}
+        </span>
       </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 text-red-600 text-sm p-3 mb-4 bg-red-50 border border-red-100"
+        >
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            className="ml-auto text-xs underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {orders.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-gray-200">
           <Package size={40} className="mx-auto text-gray-200 mb-3" />
           <p className="text-sm text-gray-500">No orders yet.</p>
-          <p className="text-xs text-gray-400 mt-1">When buyers purchase your artwork, orders will appear here.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            When buyers purchase your artwork, orders will appear here.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (
-            <div key={order._id} className="border border-gray-100 overflow-hidden">
-              {/* Order Header */}
+            <div
+              key={order._id}
+              className="border border-gray-100 overflow-hidden"
+            >
               <div className="bg-gray-50 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-gray-700">{order.orderNumber}</span>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_COLORS[order.orderStatus] || 'bg-gray-100 text-gray-600'}`}>
+                  <span className="text-xs font-semibold text-gray-700">
+                    {order.orderNumber}
+                  </span>
+                  <span
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${
+                      STATUS_COLORS[order.orderStatus] ||
+                      'bg-gray-100 text-gray-600'
+                    }`}
+                  >
                     {order.orderStatus}
                   </span>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${PAYMENT_COLORS[order.paymentStatus] || 'bg-gray-100 text-gray-600'}`}>
+                  <span
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${
+                      PAYMENT_COLORS[order.paymentStatus] ||
+                      'bg-gray-100 text-gray-600'
+                    }`}
+                  >
                     {order.paymentStatus}
                   </span>
                 </div>
                 <span className="text-xs text-gray-400">
-                  {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
                 </span>
               </div>
 
               <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  {/* Buyer Info */}
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Buyer</p>
-                    <p className="text-sm font-medium text-gray-900">{order.buyer?.name}</p>
-                    <p className="text-xs text-gray-400">{order.buyer?.email}</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Buyer
+                    </p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {order.buyer?.name}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {order.buyer?.email}
+                    </p>
                   </div>
 
-                  {/* Shipping Address */}
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Ship To</p>
-                    <p className="text-sm text-gray-700">{order.shippingAddress?.fullName}</p>
-                    <p className="text-xs text-gray-500">{order.shippingAddress?.addressLine1}</p>
-                    <p className="text-xs text-gray-500">
-                      {order.shippingAddress?.city}, {order.shippingAddress?.state} — {order.shippingAddress?.pincode}
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Ship To
                     </p>
-                    <p className="text-xs text-gray-500">{order.shippingAddress?.phone}</p>
+                    <p className="text-sm text-gray-700">
+                      {order.shippingAddress?.fullName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {order.shippingAddress?.addressLine1}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {order.shippingAddress?.city},{' '}
+                      {order.shippingAddress?.state} —{' '}
+                      {order.shippingAddress?.pincode}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {order.shippingAddress?.phone}
+                    </p>
                   </div>
                 </div>
 
-                {/* Items */}
                 <div className="border-t border-gray-100 pt-3 mb-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Items</p>
-                  {order.items.map((item, i) => (
-                    <div key={i} className="flex gap-3 mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Items
+                  </p>
+
+                  {order.items.map((item, index) => (
+                    <div key={index} className="flex gap-3 mb-2">
                       <div className="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden">
-                        {item.artwork?.images?.[0]
-                          ? <img src={item.artwork.images[0]} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-lg">🎨</div>
-                        }
+                        {item.artwork?.images?.[0] ? (
+                          <img
+                            src={item.artwork.images[0]}
+                            alt={item.artwork?.title || 'Artwork'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-lg">
+                            🎨
+                          </div>
+                        )}
                       </div>
+
                       <div className="flex-1">
-                        <p className="text-xs font-medium text-gray-800 line-clamp-1">{item.artwork?.title}</p>
-                        <p className="text-[10px] text-gray-400">{item.artwork?.code} · {item.type.replace('_', ' ')} × {item.quantity}</p>
-                        <p className="text-xs font-semibold text-gray-900 mt-0.5">₹{item.price.toLocaleString('en-IN')}</p>
+                        <p className="text-xs font-medium text-gray-800 line-clamp-1">
+                          {item.artwork?.title || 'Artwork'}
+                        </p>
+                        <p className="text-[10px] text-gray-400">
+                          {item.artwork?.code} ·{' '}
+                          {item.type.replace('_', ' ')} × {item.quantity}
+                        </p>
+                        <p className="text-xs font-semibold text-gray-900 mt-0.5">
+                          ₹{item.price.toLocaleString('en-IN')}
+                        </p>
                       </div>
                     </div>
                   ))}
+
                   <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-gray-50">
                     <span>Order Total</span>
                     <span>₹{order.total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="border-t border-gray-100 pt-3 flex flex-wrap items-center gap-2">
-                  {/* Status actions */}
-                  {order.orderStatus === 'placed' || order.orderStatus === 'confirmed' ? (
-                    <>
-                      {order.orderStatus === 'placed' && (
-                        <button
-                          onClick={() => updateOrderStatus(order._id, { orderStatus: 'confirmed' })}
-                          disabled={updatingId === order._id}
-                          className="flex items-center gap-1.5 text-xs px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
-                        >
-                          <CheckCircle size={13} /> Confirm Order
-                        </button>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="Tracking number"
-                          value={trackingInputs[order._id] || order.trackingNumber || ''}
-                          onChange={(e) => setTrackingInputs((prev) => ({ ...prev, [order._id]: e.target.value }))}
-                          className="text-xs border border-gray-200 px-3 py-2 outline-none focus:border-[#e63329] w-40"
-                        />
-                        <button
-                          onClick={() => updateOrderStatus(order._id, {
-                            orderStatus: 'shipped',
-                            trackingNumber: trackingInputs[order._id] || '',
-                          })}
-                          disabled={updatingId === order._id}
-                          className="flex items-center gap-1.5 text-xs px-3 py-2 bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
-                        >
-                          <Truck size={13} /> Mark Shipped
-                        </button>
-                      </div>
-                    </>
-                  ) : order.orderStatus === 'shipped' ? (
+                  {order.orderStatus === 'placed' && (
                     <button
-                      onClick={() => updateOrderStatus(order._id, { orderStatus: 'delivered' })}
+                      type="button"
+                      onClick={() =>
+                        updateOrderStatus(order._id, {
+                          orderStatus: 'confirmed',
+                        })
+                      }
+                      disabled={updatingId === order._id}
+                      className="flex items-center gap-1.5 text-xs px-3 py-2 border border-purple-300 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle size={13} />
+                      Confirm Order
+                    </button>
+                  )}
+
+                  {(order.orderStatus === 'placed' ||
+                    order.orderStatus === 'confirmed') && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        aria-label={`Tracking number for ${order.orderNumber}`}
+                        placeholder="Tracking number"
+                        value={
+                          trackingInputs[order._id] ??
+                          order.trackingNumber ??
+                          ''
+                        }
+                        onChange={(event) =>
+                          setTrackingInputs((prev) => ({
+                            ...prev,
+                            [order._id]: event.target.value,
+                          }))
+                        }
+                        className="text-xs border border-gray-200 px-3 py-2 outline-none focus:border-[#e63329] w-40"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateOrderStatus(order._id, {
+                            orderStatus: 'shipped',
+                            trackingNumber: (
+                              trackingInputs[order._id] ??
+                              order.trackingNumber ??
+                              ''
+                            ).trim(),
+                          })
+                        }
+                        disabled={updatingId === order._id}
+                        className="flex items-center gap-1.5 text-xs px-3 py-2 bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
+                      >
+                        <Truck size={13} />
+                        Mark Shipped
+                      </button>
+                    </div>
+                  )}
+
+                  {order.orderStatus === 'shipped' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateOrderStatus(order._id, {
+                          orderStatus: 'delivered',
+                        })
+                      }
                       disabled={updatingId === order._id}
                       className="flex items-center gap-1.5 text-xs px-3 py-2 bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
                     >
-                      <CheckCircle size={13} /> Mark Delivered
+                      <CheckCircle size={13} />
+                      Mark Delivered
                     </button>
-                  ) : null}
+                  )}
 
                   {order.trackingNumber && (
                     <span className="text-xs text-gray-500 flex items-center gap-1">
-                      <Truck size={12} /> {order.trackingNumber}
+                      <Truck size={12} />
+                      {order.trackingNumber}
                     </span>
                   )}
 
                   {updatingId === order._id && (
                     <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <Clock size={12} /> Updating...
+                      <Clock size={12} />
+                      Updating...
                     </span>
                   )}
                 </div>
