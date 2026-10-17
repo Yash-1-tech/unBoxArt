@@ -19,6 +19,7 @@ interface Artwork {
     unit: string;
   };
   originalPrice: number;
+  stock?: number;
   images: string[];
   likes: number;
   views: number;
@@ -813,6 +814,9 @@ export default function GalleryPage() {
                     )}
                     price={
                       artwork.originalPrice
+                    }
+                    stock={
+                      artwork.stock
                     }
                     image={
                       artwork

@@ -39,6 +39,7 @@ interface Artwork {
     unit: string;
   };
   originalPrice: number;
+  stock?: number;
   digitalPrintPrice?: number;
   shippingCost: number;
   avgRating: number;
@@ -126,9 +127,7 @@ export default function ProductDetailsPage() {
     fetchArtwork();
   }, [id]);
 
-  /*
-   * Fetch recommendations
-   */
+
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
@@ -185,6 +184,17 @@ export default function ProductDetailsPage() {
 
   const handleAddToCart = async (): Promise<boolean> => {
     if (!artwork) return false;
+
+    if (
+      activeTab === 'original' &&
+      typeof artwork.stock === 'number' &&
+      (artwork.stock ?? 0) <= 0
+    ) {
+      setErrorMessage(
+        'This original painting is out of stock. You can check whether a digital print is available.'
+      );
+      return false;
+    }
 
     setErrorMessage('');
     setAddingToCart(true);
@@ -292,6 +302,16 @@ export default function ProductDetailsPage() {
     : artwork.originalPrice;
 
   const shippingCost = artwork.shippingCost || 50;
+
+  const hasStockInfo =
+  typeof artwork.stock === 'number' &&
+  Number.isFinite(artwork.stock);
+
+  const originalOutOfStock =
+    hasStockInfo && (artwork.stock ?? 0)<= 0;
+
+  const selectedItemOutOfStock =
+    activeTab === 'original' && originalOutOfStock;
 
   const total = price + shippingCost;
 
@@ -639,6 +659,30 @@ export default function ProductDetailsPage() {
                   ₹{price.toLocaleString('en-IN')}
                 </span>
               </div>
+              
+              {hasStockInfo && (
+                <div className="flex items-center justify-between text-sm mb-3">
+                  <span className="text-gray-500">
+                    Original Availability
+                  </span>
+
+                  <span
+                    className={`font-medium ${
+                      (artwork.stock ?? 0)<= 0
+                        ? 'text-red-600'
+                        : (artwork.stock ?? 0) <= 2
+                          ? 'text-amber-600'
+                          : 'text-green-700'
+                    }`}
+                  >
+                    {(artwork.stock ?? 0)<= 0
+                      ? 'Out of stock'
+                      : (artwork.stock ?? 0) <= 2
+                        ? `Only ${artwork.stock ?? 0} left`
+                        : `${artwork.stock ?? 0} available`}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between text-sm mb-1.5">
                 <span className="text-gray-500">
@@ -675,7 +719,7 @@ export default function ProductDetailsPage() {
               <button
                 type="button"
                 onClick={handleBuyNow}
-                disabled={addingToCart}
+                disabled={alreadyInCart || addingToCart || selectedItemOutOfStock}
                 className="w-full btn-primary flex items-center justify-center gap-2 py-3.5 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {addingToCart ? (

@@ -327,8 +327,10 @@ export default function SellerOrders({ artistId }: { artistId: string }) {
                   ))}
 
                   <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t border-gray-50">
-                    <span>Order Total</span>
-                    <span>₹{order.total.toLocaleString('en-IN')}</span>
+                    <span>Your Sales Subtotal</span>
+                    <span>
+                      ₹{Number(order.artistSubtotal ?? 0).toLocaleString('en-IN')}
+                    </span>
                   </div>
                 </div>
 

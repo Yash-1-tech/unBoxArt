@@ -15,6 +15,7 @@ interface ArtworkCardProps {
   medium: string;
   dimensions: string;
   price: number;
+  stock?: number;
   image: string;
   likes?: number;
   views?: number;
@@ -31,6 +32,7 @@ export default function ArtworkCard({
   medium,
   dimensions,
   price,
+  stock,
   image,
   likes = 0,
   views = 0,
@@ -202,6 +204,25 @@ export default function ArtworkCard({
           <div className="text-[10px] text-gray-400 mt-1">
             No reviews yet
           </div>
+        )}
+
+        {/* Stock Availability */}
+        {typeof stock === 'number' && Number.isFinite(stock) && (
+          <p
+            className={`text-[11px] font-medium mt-2 ${
+              stock <= 0
+                ? 'text-red-600'
+                : stock <= 2
+                  ? 'text-amber-600'
+                  : 'text-green-700'
+            }`}
+          >
+            {stock <= 0
+              ? 'Out of stock'
+              : stock <= 2
+                ? `Low stock — Only ${stock} left`
+                : `In stock — ${stock} available`}
+          </p>
         )}
 
         {/* Price */}
