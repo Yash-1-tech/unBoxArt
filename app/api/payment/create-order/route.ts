@@ -61,10 +61,6 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    /*
-     * receipt is the MongoDB Order _id sent by checkout.
-     * Never trust the amount supplied by the browser.
-     */
     const mongoOrder = await Order.findById(receipt);
 
     if (!mongoOrder) {
@@ -90,6 +86,20 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (
+      mongoOrder.orderStatus === 'cancelled' ||
+      mongoOrder.inventoryReleasedAt
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'This order is no longer active. Please return to checkout and place a new order.',
+        },
+        { status: 409 }
+      );
+    }
+
 
     if (mongoOrder.paymentStatus === 'paid') {
       return NextResponse.json(

@@ -33,8 +33,20 @@ export interface IOrder extends Document {
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   razorpayOrderId?: string;
   paymentReference?: string;
-  orderStatus: 'placed' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
+  refundStatus?: 'pending' | 'processed' | 'failed';
+  refundReference?: string;
+  refundIdempotencyKey?: string;
+  refundError?: string;
+  orderStatus:
+    | 'placed'
+    | 'confirmed'
+    | 'shipped'
+    | 'delivered'
+    | 'cancelled'
+    | 'returned';
   inventoryAdjusted: boolean;
+  inventoryReservationExpiresAt?: Date;
+  inventoryReleasedAt?: Date;
   trackingNumber?: string;
   notes?: string;
   createdAt: Date;
@@ -42,45 +54,125 @@ export interface IOrder extends Document {
 }
 
 const OrderItemSchema = new Schema<IOrderItem>({
-  artwork: { type: Schema.Types.ObjectId, ref: 'Artwork', required: true },
-  type: { type: String, enum: ['original', 'digital_print'], required: true },
+  artwork: {
+    type: Schema.Types.ObjectId,
+    ref: 'Artwork',
+    required: true,
+  },
+  type: {
+    type: String,
+    enum: ['original', 'digital_print'],
+    required: true,
+  },
   printMedium: String,
   printSize: String,
-  quantity: { type: Number, required: true, min: 1, default: 1 },
-  price: { type: Number, required: true },
+  quantity: { type: Number, required: true, min: 1, default: 1,},
+  price: {type: Number, required: true,},
 });
 
 const ShippingAddressSchema = new Schema<IShippingAddress>({
-  fullName: { type: String, required: true },
-  phone: { type: String, required: true },
-  addressLine1: { type: String, required: true },
+  fullName: {
+    type: String,
+    required: true,
+  },
+  phone: {
+    type: String,
+    required: true,
+  },
+  addressLine1: {
+    type: String,
+    required: true,
+  },
   addressLine2: String,
-  city: { type: String, required: true },
-  state: { type: String, required: true },
-  pincode: { type: String, required: true },
-  country: { type: String, required: true, default: 'India' },
+  city: {
+    type: String,
+    required: true,
+  },
+  state: {
+    type: String,
+    required: true,
+  },
+  pincode: {
+    type: String,
+    required: true,
+  },
+  country: {
+    type: String,
+    required: true,
+    default: 'India',
+  },
 });
 
 const OrderSchema = new Schema<IOrder>(
   {
-    orderNumber: { type: String, required: true, unique: true },
-    buyer: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    orderNumber: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    buyer: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
     items: [OrderItemSchema],
     shippingAddress: ShippingAddressSchema,
-    subtotal: { type: Number, required: true },
-    shippingCost: { type: Number, required: true, default: 0 },
-    discount: { type: Number, default: 0 },
-    total: { type: Number, required: true },
-    paymentMethod: { type: String, required: true },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
+    subtotal: {
+      type: Number,
+      required: true,
+    },
+    shippingCost: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    discount: {
+      type: Number,
+      default: 0,
+    },
+    total: {
+      type: Number,
+      required: true,
+    },
+    paymentMethod: {
+      type: String,
+      required: true,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'paid', 'failed', 'refunded'],
+      default: 'pending',
+    },
     razorpayOrderId: String,
     paymentReference: String,
-    inventoryAdjusted: {type: Boolean,default: false,},
-    orderStatus: { type: String, enum: ['placed', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'], default: 'placed' },
+    refundStatus: {
+      type: String,
+      enum: ['pending', 'processed', 'failed'],
+    },
+    refundReference: String,
+    refundIdempotencyKey: String,
+    refundError: String,
+    inventoryAdjusted: {
+      type: Boolean,
+      default: false,
+    },
+    inventoryReservationExpiresAt: {
+      type: Date,
+    },
+    inventoryReleasedAt: {
+      type: Date,
+    },
+    orderStatus: {
+      type: String,
+      enum: ['placed','confirmed','shipped','delivered','cancelled','returned',],
+      default: 'placed',
+    },
     trackingNumber: String,
     notes: String,
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 OrderSchema.pre('validate', async function () {
@@ -94,6 +186,7 @@ OrderSchema.pre('validate', async function () {
 });
 
 const Order: Model<IOrder> =
-  mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema);
+  mongoose.models.Order ||
+  mongoose.model<IOrder>('Order', OrderSchema);
 
 export default Order;

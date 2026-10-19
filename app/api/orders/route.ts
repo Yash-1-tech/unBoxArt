@@ -158,13 +158,6 @@ export async function POST(req: NextRequest) {
       paymentMethod,
     } = body;
 
-    /*
-     * The browser may send buyer/items/prices,
-     * but none of those values are trusted.
-     *
-     * Buyer comes from the session.
-     * Items, quantities and prices come from MongoDB.
-     */
     if (!shippingAddress || !paymentMethod) {
       return NextResponse.json(
         {
@@ -242,9 +235,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * Read the actual cart from MongoDB.
-     */
     const cart = await Cart.findOne({
       user: sessionUser.id,
     }).lean();
@@ -288,10 +278,6 @@ export async function POST(req: NextRequest) {
     let subtotal = 0;
     let shippingCost = 0;
 
-    /*
-     * First validate the complete cart using current
-     * database values.
-     */
     for (const cartItem of cart.items) {
       const artwork =
         artworkMap.get(
@@ -346,9 +332,6 @@ export async function POST(req: NextRequest) {
       let itemShipping = 0;
       
       if (cartItem.type === 'original') {
-        /*
-         * Current stock check.
-         */
         const artworkId = artwork._id.toString();
         const availableStock = Number(artwork.stock);
 
@@ -393,9 +376,6 @@ export async function POST(req: NextRequest) {
             artwork.shippingCost
           ) || 0;
       } else {
-        /*
-         * Digital prints do not consume original stock.
-         */
         if (
           artwork.digitalPrintPrice == null
         ) {
@@ -452,9 +432,6 @@ export async function POST(req: NextRequest) {
       shippingCost -
       discount;
 
-    /*
-     * Server-side COD restriction.
-     */
     if (
       paymentMethod === 'cod' &&
       total >= 50000
@@ -468,6 +445,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (paymentMethod !== 'razorpay') {
       for (const item of orderItems) {
         if (item.type !== 'original') {
           continue;
@@ -505,10 +483,8 @@ export async function POST(req: NextRequest) {
           quantity: item.quantity,
         });
       }
+    }
 
-    /*
-     * Create the order using ONLY server-calculated data.
-     */
     const order = await Order.create({
       buyer: sessionUser.id,
 
@@ -554,11 +530,9 @@ export async function POST(req: NextRequest) {
       paymentStatus:
         'pending',
       
-      inventoryAdjusted:
-         reservedOriginals.length > 0,
+      inventoryAdjusted: reservedOriginals.length > 0,
 
-      orderStatus:
-        'placed',
+      orderStatus: 'placed',
     });
 
 
