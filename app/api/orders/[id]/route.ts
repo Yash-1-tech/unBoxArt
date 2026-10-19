@@ -131,14 +131,18 @@ export async function PATCH(
       return jsonError('Invalid order ID', 400);
     }
 
-    if (sessionUser.role !== 'artist') {
-      return jsonError(
-        'Only authorized artists can update seller orders',
-        403
-      );
+    if (
+      sessionUser.role !== 'buyer' &&
+      sessionUser.role !== 'artist'
+    ) {
+      return jsonError('Not authorized to update orders', 403);
     }
 
     const body = await req.json();
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonError('Invalid request body', 400);
+    }
 
     const forbiddenFields = [
       'paymentStatus',
@@ -164,59 +168,11 @@ export async function PATCH(
       );
     }
 
-    const order = await Order.findById(id);
-
-    if (!order) {
-      return jsonError('Order not found', 404);
-    }
-
-    const artworkIds = order.items.map((item) =>
-      item.artwork.toString()
-    );
-
-    const ownedArtworks = await Artwork.find({
-      _id: { $in: artworkIds },
-      artist: sessionUser.id,
-    })
-      .select('_id')
-      .lean();
-
-    const ownedArtworkIds = new Set(
-      ownedArtworks.map((artwork) =>
-        artwork._id.toString()
-      )
-    );
-
-    const ownsAnyItem = artworkIds.some((artworkId) =>
-      ownedArtworkIds.has(artworkId)
-    );
-
-    if (!ownsAnyItem) {
-      return jsonError(
-        'You are not authorized to update this order',
-        403
-      );
-    }
-
-    const ownsEveryItem = artworkIds.every(
-      (artworkId) => ownedArtworkIds.has(artworkId)
-    );
-
-    if (!ownsEveryItem) {
-      return jsonError(
-        'This order contains artwork from multiple artists. Order-level changes are disabled for mixed-artist orders.',
-        400
-      );
-    }
-
-    const requestedStatus = body.orderStatus as
-      | string
-      | undefined;
-
-    /*
-     * Only allow operational fields that this endpoint owns.
-     */
-    const allowedFields = ['orderStatus', 'trackingNumber', 'notes'];
+    const allowedFields = [
+      'orderStatus',
+      'trackingNumber',
+      'notes',
+    ];
 
     const unknownFields = Object.keys(body).filter(
       (field) => !allowedFields.includes(field)
@@ -229,10 +185,102 @@ export async function PATCH(
       );
     }
 
-    if (requestedStatus === 'cancelled') {
+    if (
+      body.orderStatus !== undefined &&
+      typeof body.orderStatus !== 'string'
+    ) {
+      return jsonError('Invalid order status', 400);
+    }
+
+    const requestedStatus = body.orderStatus as
+      | string
+      | undefined;
+
+    const order = await Order.findById(id);
+
+    if (!order) {
+      return jsonError('Order not found', 404);
+    }
+
+    /*
+     * BUYER PERMISSIONS
+     * Buyers may only cancel their own eligible orders.
+     */
+    if (sessionUser.role === 'buyer') {
+      const buyerId = String(order.buyer);
+
+      if (buyerId !== sessionUser.id) {
+        return jsonError(
+          'You are not authorized to update this order',
+          403
+        );
+      }
+
       if (
-        order.paymentStatus === 'paid'
+        requestedStatus !== 'cancelled' ||
+        Object.keys(body).some(
+          (field) => field !== 'orderStatus'
+        )
       ) {
+        return jsonError(
+          'Buyers can only request cancellation of their own eligible orders',
+          400
+        );
+      }
+    }
+
+    /*
+     * ARTIST PERMISSIONS
+     * Preserve the existing ownership checks and
+     * mixed-artist order restrictions.
+     */
+    if (sessionUser.role === 'artist') {
+      const artworkIds = order.items.map((item) =>
+        item.artwork.toString()
+      );
+
+      const ownedArtworks = await Artwork.find({
+        _id: { $in: artworkIds },
+        artist: sessionUser.id,
+      })
+        .select('_id')
+        .lean();
+
+      const ownedArtworkIds = new Set(
+        ownedArtworks.map((artwork) =>
+          artwork._id.toString()
+        )
+      );
+
+      const ownsAnyItem = artworkIds.some((artworkId) =>
+        ownedArtworkIds.has(artworkId)
+      );
+
+      if (!ownsAnyItem) {
+        return jsonError(
+          'You are not authorized to update this order',
+          403
+        );
+      }
+
+      const ownsEveryItem = artworkIds.every(
+        (artworkId) => ownedArtworkIds.has(artworkId)
+      );
+
+      if (!ownsEveryItem) {
+        return jsonError(
+          'This order contains artwork from multiple artists. Order-level changes are disabled for mixed-artist orders.',
+          400
+        );
+      }
+    }
+
+    /*
+     * CANCELLATION
+     * Shared by authorized buyers and artists.
+     */
+    if (requestedStatus === 'cancelled') {
+      if (order.paymentStatus === 'paid') {
         return jsonError(
           'Paid orders require a refund workflow before cancellation',
           400
@@ -261,7 +309,7 @@ export async function PATCH(
             throw new Error('Order not found');
           }
 
-          // Prevent duplicate inventory restoration.
+          // Prevent duplicate stock restoration.
           if (currentOrder.orderStatus === 'cancelled') {
             return;
           }
@@ -281,8 +329,11 @@ export async function PATCH(
             );
           }
 
+          // Restore stock only if this order previously
+          // deducted inventory.
           if (currentOrder.inventoryAdjusted) {
             for (const item of currentOrder.items) {
+              // Digital prints do not consume original stock.
               if (item.type !== 'original') {
                 continue;
               }
@@ -317,6 +368,23 @@ export async function PATCH(
             session: dbSession,
           });
         });
+      } catch (err) {
+        if (err instanceof Error) {
+          const status =
+            err.message === 'Order not found' ? 404 : 400;
+
+          if (
+            err.message === 'Order not found' ||
+            err.message ===
+              'Paid orders cannot be cancelled without a refund' ||
+            err.message ===
+              'This order can no longer be cancelled'
+          ) {
+            return jsonError(err.message, status);
+          }
+        }
+
+        throw err;
       } finally {
         await dbSession.endSession();
       }
@@ -324,6 +392,16 @@ export async function PATCH(
       const cancelledOrder = await Order.findById(id);
 
       return NextResponse.json(cancelledOrder);
+    }
+
+    /*
+     * All remaining updates are artist-only.
+     */
+    if (sessionUser.role !== 'artist') {
+      return jsonError(
+        'Buyers can only cancel their own eligible orders',
+        400
+      );
     }
 
     if (requestedStatus !== undefined) {
@@ -353,8 +431,7 @@ export async function PATCH(
           );
         }
 
-        order.trackingNumber =
-          body.trackingNumber.trim();
+        order.trackingNumber = body.trackingNumber.trim();
       }
     } else if (body.trackingNumber !== undefined) {
       return jsonError(

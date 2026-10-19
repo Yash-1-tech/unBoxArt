@@ -134,6 +134,8 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [ordersError, setOrdersError] = useState('');
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [orderActionErrors, setOrderActionErrors] = useState<Record<string, string>>({});
   const [editingArtwork, setEditingArtwork] = useState<any | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -235,6 +237,57 @@ export default function DashboardPage() {
     };
   }, [user]);
 
+  const handleCancelOrder = async (order: DashboardOrder) => {
+    const confirmed = window.confirm(
+      `Cancel order ${order.orderNumber}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setCancellingOrderId(order._id);
+
+    setOrderActionErrors((prev) => {
+      const next = { ...prev };
+      delete next[order._id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`/api/orders/${order._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderStatus: 'cancelled',
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cancel order.');
+      }
+
+      setOrders((prev) =>
+        prev.map((item) =>
+          item._id === order._id
+            ? { ...item, orderStatus: 'cancelled' }
+            : item
+        )
+      );
+    } catch (err) {
+      setOrderActionErrors((prev) => ({
+        ...prev,
+        [order._id]:
+          err instanceof Error
+            ? err.message
+            : 'Failed to cancel order.',
+      }));
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   const handleProfileChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -1418,6 +1471,30 @@ export default function DashboardPage() {
                           </p>
                         </div>
                       </div>
+                      {/* Buyer cancellation */}
+                      {user?.role === 'buyer' &&
+                        ['placed', 'confirmed'].includes(order.orderStatus) &&
+                        order.paymentStatus !== 'paid' &&
+                        order.paymentStatus !== 'refunded' && (
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => handleCancelOrder(order)}
+                              disabled={cancellingOrderId === order._id}
+                              className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
+                            >
+                              {cancellingOrderId === order._id
+                                ? 'Cancelling...'
+                                : 'Cancel Order'}
+                            </button>
+
+                            {orderActionErrors[order._id] && (
+                              <p role="alert" className="text-sm text-red-600 mt-2">
+                                {orderActionErrors[order._id]}
+                              </p>
+                            )}
+                          </div>
+                        )}
                     </article>
                   ))}
                 </div>

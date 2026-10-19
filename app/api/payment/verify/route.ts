@@ -146,6 +146,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (order.orderStatus === 'cancelled') {
+      return NextResponse.json(
+        {
+          error:
+            'This order was cancelled and cannot be verified',
+        },
+        { status: 409 }
+      );
+    }
+
     if (
       !order.razorpayOrderId ||
       order.razorpayOrderId !==
@@ -197,37 +207,43 @@ export async function POST(req: NextRequest) {
             return;
           }
 
-          for (const item of currentOrder.items) {
-            if (
-              item.type !== 'original'
-            ) {
-              continue;
-            }
+          if (currentOrder.orderStatus === 'cancelled') {
+            throw new Error(
+              'This order was cancelled and cannot be verified'
+            );
+          }
 
-            const updatedArtwork =
-              await Artwork.findOneAndUpdate(
-                {
-                  _id: item.artwork,
-                  isAvailable: true,
-                  stock: {
-                    $gte: item.quantity,
-                  },
-                },
-                {
-                  $inc: {
-                    stock: -item.quantity,
-                  },
-                },
-                {
-                  new: true,
-                  session: dbSession,
-                }
-              );
+          if (!currentOrder.inventoryAdjusted) {
+            for (const item of currentOrder.items) {
+              if (item.type !== 'original') {
+                continue;
+              }
 
-            if (!updatedArtwork) {
-              throw new Error(
-                'One or more original artworks no longer have sufficient stock'
-              );
+              const updatedArtwork =
+                await Artwork.findOneAndUpdate(
+                  {
+                    _id: item.artwork,
+                    isAvailable: true,
+                    stock: {
+                      $gte: item.quantity,
+                    },
+                  },
+                  {
+                    $inc: {
+                      stock: -item.quantity,
+                    },
+                  },
+                  {
+                    new: true,
+                    session: dbSession,
+                  }
+                );
+
+              if (!updatedArtwork) {
+                throw new Error(
+                  'One or more original artworks no longer have sufficient stock'
+                );
+              }
             }
           }
 
@@ -267,9 +283,15 @@ export async function POST(req: NextRequest) {
         ? err.message
         : 'Payment verification failed';
 
+    const status =
+      message ===
+      'This order was cancelled and cannot be verified'
+        ? 409
+        : 500;
+
     return NextResponse.json(
       { error: message },
-      { status: 500 }
+      { status }
     );
   }
 }

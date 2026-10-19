@@ -283,6 +283,7 @@ export async function POST(req: NextRequest) {
     );
 
     const orderItems: ServerOrderItem[] = [];
+    const requestedOriginalQuantities = new Map<string, number>();
 
     let subtotal = 0;
     let shippingCost = 0;
@@ -317,18 +318,25 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const quantity = Number(
-        cartItem.quantity
-      );
+      if (
+        cartItem.type !== 'original' &&
+        cartItem.type !== 'digital_print'
+      ) {
+        return NextResponse.json(
+          { error: 'Invalid artwork type in your cart' },
+          { status: 400 }
+        );
+      }
+
+      const quantity = Number(cartItem.quantity);
 
       if (
-        !Number.isInteger(quantity) ||
+        !Number.isSafeInteger(quantity) ||
         quantity < 1
       ) {
         return NextResponse.json(
           {
-            error:
-              `Invalid quantity for "${artwork.title}"`,
+            error: `Invalid quantity for "${artwork.title}"`,
           },
           { status: 400 }
         );
@@ -336,24 +344,45 @@ export async function POST(req: NextRequest) {
 
       let price = 0;
       let itemShipping = 0;
-
+      
       if (cartItem.type === 'original') {
         /*
          * Current stock check.
          */
-        if (quantity > artwork.stock) {
+        const artworkId = artwork._id.toString();
+        const availableStock = Number(artwork.stock);
+
+        if (
+          !Number.isSafeInteger(availableStock) ||
+          availableStock < 0
+        ) {
           return NextResponse.json(
             {
-              error:
-                `"${artwork.title}" only has ${artwork.stock} original${
-                  artwork.stock === 1
-                    ? ''
-                    : 's'
-                } available`,
+              error: `Stock information is invalid for "${artwork.title}". Please contact support.`,
             },
             { status: 400 }
           );
         }
+
+        const requestedTotal =
+          (requestedOriginalQuantities.get(artworkId) || 0) +
+          quantity;
+
+        if (requestedTotal > availableStock) {
+          return NextResponse.json(
+            {
+              error: `"${artwork.title}" has ${availableStock} original${
+                availableStock === 1 ? '' : 's'
+              } available, but your cart requests ${requestedTotal}.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        requestedOriginalQuantities.set(
+          artworkId,
+          requestedTotal
+        );
 
         price = Number(
           artwork.originalPrice
@@ -439,15 +468,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * For manual/COD orders, reserve the original
-     * artwork stock NOW.
-     *
-     * Razorpay orders do NOT reserve stock here.
-     * Razorpay stock is reduced only after successful
-     * payment verification.
-     */
-    if (paymentMethod !== 'razorpay') {
       for (const item of orderItems) {
         if (item.type !== 'original') {
           continue;
@@ -485,7 +505,6 @@ export async function POST(req: NextRequest) {
           quantity: item.quantity,
         });
       }
-    }
 
     /*
      * Create the order using ONLY server-calculated data.
@@ -536,15 +555,13 @@ export async function POST(req: NextRequest) {
         'pending',
       
       inventoryAdjusted:
-        paymentMethod !== 'razorpay',
+         reservedOriginals.length > 0,
 
       orderStatus:
         'placed',
     });
 
-    /*
-     * Send emails after successful order creation.
-     */
+
     try {
       const emailItems =
         orderItems.map((item) => {
@@ -628,10 +645,7 @@ export async function POST(req: NextRequest) {
       err
     );
 
-    /*
-     * If we reserved stock for a manual/COD order
-     * but order creation failed, restore it.
-     */
+
     if (
       reservedOriginals.length > 0
     ) {

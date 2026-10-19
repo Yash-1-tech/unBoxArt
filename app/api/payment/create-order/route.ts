@@ -74,9 +74,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * Make sure this order belongs to the logged-in buyer.
-     */
     if (
       mongoOrder.buyer.toString() !==
       session.user.id
@@ -101,10 +98,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /*
-     * Avoid creating multiple Razorpay orders for the same
-     * MongoDB order.
-     */
+
     if (mongoOrder.razorpayOrderId) {
       return NextResponse.json({
         orderId: mongoOrder.razorpayOrderId,
