@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { User, MessageSquare, Image, ShoppingBag, CreditCard, Settings, LogOut, Plus, CheckCircle, Upload, Edit3, Trash2, Star, Package,Truck} from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import SellerOrders from '@/components/dashboard/SellerOrders';
+import { useRouter } from 'next/navigation';
 
 const NAV_ITEMS = [
   { id: 'profile', label: 'My Profile', icon: User },
@@ -98,8 +99,25 @@ interface DashboardOrder {
 }
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState('profile');
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/auth/signin?from=/dashboard');
+    }
+  }, [loading, user, router]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="text-sm text-gray-500">
+          {loading ? 'Checking your session...' : 'Redirecting to sign in...'}
+        </p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(
