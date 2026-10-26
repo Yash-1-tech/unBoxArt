@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
@@ -28,6 +27,13 @@ export async function POST() {
       );
     }
 
+    if (!session.user.id) {
+      return NextResponse.json(
+        { error: 'Artist account ID is missing from the session' },
+        { status: 401 }
+      );
+    }
+
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
@@ -50,9 +56,12 @@ export async function POST() {
 
     const timestamp = Math.floor(Date.now() / 1000);
 
+    const artistTag = `artist_${session.user.id}`;
+
     const paramsToSign = {
-    timestamp,
-    upload_preset: uploadPreset,
+      timestamp,
+      upload_preset: uploadPreset,
+      tags: artistTag,
     };
 
     const signature = cloudinary.utils.api_sign_request(
