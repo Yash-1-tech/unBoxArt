@@ -5,6 +5,124 @@ import { useRouter } from 'next/navigation';
 import { Upload, X, ImagePlus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
+type CloudinarySignature = {
+  cloudName: string;
+  apiKey: string;
+  signature: string;
+  timestamp: number;
+  upload_preset: string;
+  tags?: string;
+};
+
+const MAX_FILES = 6;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+async function uploadImagesDirectly(files: File[]): Promise<string[]> {
+  if (files.length === 0 || files.length > MAX_FILES) {
+    throw new Error(`Select between 1 and ${MAX_FILES} images.`);
+  }
+
+  for (const file of files) {
+    if (file.size <= 0) {
+      throw new Error(`File "${file.name}" is empty.`);
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      throw new Error(`File "${file.name}" must be JPEG, PNG, or WebP.`);
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File "${file.name}" exceeds the 10MB limit.`);
+    }
+  }
+
+  const signatureResponse = await fetch('/api/upload/signature', {
+    method: 'POST',
+  });
+  const signatureData = (await signatureResponse.json().catch(() => ({}))) as
+    Partial<CloudinarySignature> & { error?: string };
+
+  if (!signatureResponse.ok) {
+    throw new Error(
+      signatureData.error || 'Unable to authorize image uploads.'
+    );
+  }
+
+  if (
+    !signatureData.cloudName ||
+    !signatureData.apiKey ||
+    !signatureData.signature ||
+    typeof signatureData.timestamp !== 'number' ||
+    !signatureData.upload_preset
+  ) {
+    throw new Error('The upload signature response is incomplete.');
+  }
+
+  const config = signatureData as CloudinarySignature;
+
+  // Direct uploads avoid sending large image files through a Next.js route.
+  const results = await Promise.allSettled(
+    files.map(async (file) => {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('api_key', config.apiKey);
+      uploadData.append('timestamp', String(config.timestamp));
+      uploadData.append('upload_preset', config.upload_preset);
+      if (config.tags) {
+        uploadData.append('tags', config.tags);
+      }
+      uploadData.append('signature', config.signature);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/image/upload`,
+        {
+          method: 'POST',
+          body: uploadData,
+        }
+      );
+
+      const result = (await response.json().catch(() => ({}))) as {
+        secure_url?: string;
+        error?: { message?: string };
+      };
+
+      if (!response.ok || !result.secure_url) {
+        throw new Error(
+          result.error?.message || `Failed to upload ${file.name}.`
+        );
+      }
+
+      return result.secure_url;
+    })
+  );
+
+  const urls = results.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : []
+  );
+
+  if (results.some((result) => result.status === 'rejected')) {
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected'
+    );
+
+    console.error(
+      '[Direct Cloudinary upload failures]',
+      failures.map((result) => result.reason)
+    );
+
+    throw new Error(
+      `${failures.length} image(s) failed to upload. Please retry the upload.`
+    );
+  }
+
+  return urls;
+}
+
 export default function UploadArtworkPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -40,15 +158,41 @@ export default function UploadArtworkPage() {
 
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return;
-    const newImages = Array.from(files).map((file) => ({
+
+    const chosenFiles = Array.from(files);
+    const existingCount = images.length;
+
+    if (existingCount + chosenFiles.length > MAX_FILES) {
+      setError(`You can upload at most ${MAX_FILES} images.`);
+      return;
+    }
+
+    for (const file of chosenFiles) {
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+        setError(`File "${file.name}" must be JPEG, PNG, or WebP.`);
+        return;
+      }
+
+      if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
+        setError(`File "${file.name}" must be larger than 0 bytes and no more than 10MB.`);
+        return;
+      }
+    }
+
+    setError('');
+    const newImages = chosenFiles.map((file) => ({
       file,
       preview: URL.createObjectURL(file),
     }));
-    setImages((prev) => [...prev, ...newImages].slice(0, 6));
+    setImages((prev) => [...prev, ...newImages]);
   };
 
   const removeImage = (index: number) =>
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -80,29 +224,11 @@ export default function UploadArtworkPage() {
 
     setUploading(true);
     try {
-      const formData = new FormData();
+      const selectedFiles = images.map((img) => img.file);
+      const imageUrls = await uploadImagesDirectly(selectedFiles);
 
-      images.forEach((img) => {
-        formData.append('files', img.file);
-      });
-
-      const uploadRes = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const uploadData = await uploadRes.json();
-
-      if (!uploadRes.ok) {
-        throw new Error(
-          uploadData.error || 'Image upload failed'
-        );
-      }
-
-      const imageUrls: string[] = uploadData.urls || [];
-
-      if (imageUrls.length === 0) {
-        throw new Error('Image upload returned no image URLs');
+      if (imageUrls.length !== selectedFiles.length) {
+        throw new Error('Not all images were uploaded successfully.');
       }
 
       const artworkRes = await fetch('/api/artworks', {
@@ -184,7 +310,7 @@ export default function UploadArtworkPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               multiple
               onChange={(e) => handleFilesSelected(e.target.files)}
               className="hidden"
