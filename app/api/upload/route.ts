@@ -233,8 +233,6 @@ const files = entries;
         }
       }
 
-      // Remove images that succeeded so the failed batch leaves
-      // as few unused Cloudinary assets as possible.
       const cleanupResults = await Promise.allSettled(
         successfulUploads.map((upload) =>
           cloudinary.uploader.destroy(upload.publicId, {
