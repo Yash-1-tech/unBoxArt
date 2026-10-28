@@ -12,6 +12,7 @@ type CloudinarySignature = {
   timestamp: number;
   upload_preset: string;
   tags?: string;
+  uploadBatchId: string;
 };
 
 const MAX_FILES = 6;
@@ -44,6 +45,7 @@ async function uploadImagesDirectly(files: File[]): Promise<string[]> {
   const signatureResponse = await fetch('/api/upload/signature', {
     method: 'POST',
   });
+
   const signatureData = (await signatureResponse.json().catch(() => ({}))) as
     Partial<CloudinarySignature> & { error?: string };
 
@@ -58,28 +60,30 @@ async function uploadImagesDirectly(files: File[]): Promise<string[]> {
     !signatureData.apiKey ||
     !signatureData.signature ||
     typeof signatureData.timestamp !== 'number' ||
-    !signatureData.upload_preset
+    !signatureData.upload_preset ||
+    !signatureData.tags ||
+    !signatureData.uploadBatchId
   ) {
     throw new Error('The upload signature response is incomplete.');
   }
 
   const config = signatureData as CloudinarySignature;
 
-  // Direct uploads avoid sending large image files through a Next.js route.
   const results = await Promise.allSettled(
     files.map(async (file) => {
       const uploadData = new FormData();
+
       uploadData.append('file', file);
       uploadData.append('api_key', config.apiKey);
       uploadData.append('timestamp', String(config.timestamp));
       uploadData.append('upload_preset', config.upload_preset);
-      if (config.tags) {
-        uploadData.append('tags', config.tags);
-      }
+      uploadData.append('tags', config.tags!);
       uploadData.append('signature', config.signature);
 
       const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${encodeURIComponent(
+          config.cloudName
+        )}/image/upload`,
         {
           method: 'POST',
           body: uploadData,
@@ -88,39 +92,87 @@ async function uploadImagesDirectly(files: File[]): Promise<string[]> {
 
       const result = (await response.json().catch(() => ({}))) as {
         secure_url?: string;
+        public_id?: string;
         error?: { message?: string };
       };
 
-      if (!response.ok || !result.secure_url) {
+      if (!response.ok || !result.secure_url || !result.public_id) {
         throw new Error(
           result.error?.message || `Failed to upload ${file.name}.`
         );
       }
 
-      return result.secure_url;
+      return {
+        url: result.secure_url,
+        publicId: result.public_id,
+      };
     })
   );
 
-  const urls = results.flatMap((result) =>
+  const successfulUploads = results.flatMap((result) =>
     result.status === 'fulfilled' ? [result.value] : []
   );
 
-  if (results.some((result) => result.status === 'rejected')) {
-    const failures = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected'
-    );
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult =>
+      result.status === 'rejected'
+  );
 
+  if (failures.length > 0) {
     console.error(
       '[Direct Cloudinary upload failures]',
       failures.map((result) => result.reason)
     );
 
+    let cleanupIncomplete = false;
+
+    if (successfulUploads.length > 0) {
+      try {
+        const cleanupResponse = await fetch('/api/upload/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publicIds: successfulUploads.map((upload) => upload.publicId),
+            uploadBatchId: config.uploadBatchId,
+          }),
+        });
+
+        const cleanupData = (await cleanupResponse.json().catch(() => ({}))) as {
+          cleanedCount?: number;
+          failedCount?: number;
+          error?: string;
+        };
+
+        cleanupIncomplete =
+          !cleanupResponse.ok ||
+          cleanupData.cleanedCount !== successfulUploads.length ||
+          (cleanupData.failedCount ?? 0) > 0;
+
+        if (cleanupIncomplete) {
+          console.error(
+            '[Cloudinary cleanup incomplete]',
+            cleanupData
+          );
+        }
+      } catch (cleanupError) {
+        cleanupIncomplete = true;
+        console.error(
+          '[Cloudinary cleanup request failed]',
+          cleanupError
+        );
+      }
+    }
+
+    const cleanupMessage = cleanupIncomplete
+      ? ' Some uploaded images may remain in Cloudinary.'
+      : '';
+
     throw new Error(
-      `${failures.length} image(s) failed to upload. Please retry the upload.`
+      `${failures.length} image(s) failed to upload. Please try again.${cleanupMessage}`
     );
   }
 
-  return urls;
+  return successfulUploads.map((upload) => upload.url);
 }
 
 export default function UploadArtworkPage() {

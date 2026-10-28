@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
@@ -8,7 +7,6 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate the request.
     const cookieStore = await cookies();
     const session = await getIronSession<SessionData>(
       cookieStore,
@@ -24,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     if (session.user.role !== 'artist') {
       return NextResponse.json(
-        { error: 'Only artist accounts can clean up artwork uploads' },
+        { error: 'Only artist accounts can clean up uploads' },
         { status: 403 }
       );
     }
@@ -36,7 +34,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate the submitted public IDs.
     let body: unknown;
 
     try {
@@ -48,14 +45,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!body || typeof body !== 'object' || !('publicIds' in body)) {
+    if (!body || typeof body !== 'object') {
       return NextResponse.json(
-        { error: 'An array of publicIds is required' },
+        { error: 'Invalid cleanup request' },
         { status: 400 }
       );
     }
 
-    const publicIds = (body as { publicIds?: unknown }).publicIds;
+    const payload = body as {
+      publicIds?: unknown;
+      uploadBatchId?: unknown;
+    };
+
+    const { publicIds, uploadBatchId } = payload;
+
+    if (
+      typeof uploadBatchId !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        uploadBatchId
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'A valid upload batch ID is required' },
+        { status: 400 }
+      );
+    }
 
     if (
       !Array.isArray(publicIds) ||
@@ -69,7 +83,7 @@ export async function POST(req: NextRequest) {
       )
     ) {
       return NextResponse.json(
-        { error: 'Provide between 1 and 6 valid Cloudinary public IDs' },
+        { error: 'Provide between 1 and 6 valid public IDs' },
         { status: 400 }
       );
     }
@@ -101,20 +115,20 @@ export async function POST(req: NextRequest) {
     });
 
     const artistTag = `artist_${session.user.id}`;
+    const batchTag = `uploadbatch_${uploadBatchId}`;
 
     const results = await Promise.allSettled(
       publicIds.map(async (publicId: string) => {
-        // Look up the asset using Cloudinary's authenticated Admin API.
         const resource = await cloudinary.api.resource(publicId, {
           resource_type: 'image',
         });
 
-        // Never delete an asset unless its ownership tag matches.
         const tags: string[] = Array.isArray(resource.tags)
           ? resource.tags
           : [];
 
-        if (!tags.includes(artistTag)) {
+        // Require both tags before deleting anything.
+        if (!tags.includes(artistTag) || !tags.includes(batchTag)) {
           return false;
         }
 
@@ -132,18 +146,21 @@ export async function POST(req: NextRequest) {
         result.status === 'fulfilled' && result.value === true
     ).length;
 
-    const failedCount = results.filter(
-      (result) => result.status === 'rejected'
-    ).length;
+    const failedCount = results.length - cleanedCount;
 
     if (failedCount > 0) {
       console.error(
-        '[POST /api/upload/cleanup] Some cleanup operations failed',
-        results
-          .filter((result) => result.status === 'rejected')
-          .map((result) =>
-            result.status === 'rejected' ? result.reason : undefined
-          )
+        '[POST /api/upload/cleanup] Some assets could not be cleaned up',
+        results.map((result, index) => ({
+          publicId: publicIds[index],
+          status: result.status,
+          reason:
+            result.status === 'rejected'
+              ? String(result.reason)
+              : result.value
+                ? undefined
+                : 'Ownership tags did not match or Cloudinary did not delete the asset',
+        })).filter((result) => result.status === 'rejected' || result.reason)
       );
     }
 

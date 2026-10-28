@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
@@ -55,13 +56,17 @@ export async function POST() {
     });
 
     const timestamp = Math.floor(Date.now() / 1000);
+    const uploadBatchId = randomUUID();
 
     const artistTag = `artist_${session.user.id}`;
+    const batchTag = `uploadbatch_${uploadBatchId}`;
+    const tags = `${artistTag},${batchTag}`;
 
+    // Sign the exact parameters that the browser sends to Cloudinary.
     const paramsToSign = {
       timestamp,
       upload_preset: uploadPreset,
-      tags: artistTag,
+      tags,
     };
 
     const signature = cloudinary.utils.api_sign_request(
@@ -74,6 +79,7 @@ export async function POST() {
       apiKey,
       signature,
       ...paramsToSign,
+      uploadBatchId,
     });
   } catch (err: unknown) {
     console.error('[POST /api/upload/signature]', err);
