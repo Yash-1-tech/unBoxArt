@@ -20,19 +20,27 @@ const CartItemSchema = new Schema<ICartItem>(
     artwork: {
       type: Schema.Types.ObjectId,
       ref: 'Artwork',
-      required: true,
+      required: [true, 'Artwork is required'],
     },
 
     type: {
       type: String,
-      enum: ['original', 'digital_print'],
-      required: true,
+      enum: {
+        values: ['original', 'digital_print'],
+        message: 'Invalid cart item type',
+      },
+      required: [true, 'Item type is required'],
     },
 
     quantity: {
       type: Number,
-      required: true,
-      min: 1,
+      required: [true, 'Quantity is required'],
+      min: [1, 'Quantity must be at least 1'],
+      validate: {
+        validator: (value: number) =>
+          Number.isSafeInteger(value) && value >= 1,
+        message: 'Quantity must be a positive safe integer',
+      },
       default: 1,
     },
   },
@@ -44,13 +52,24 @@ const CartSchema = new Schema<ICart>(
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: [true, 'Cart owner is required'],
       unique: true,
     },
 
     items: {
       type: [CartItemSchema],
       default: [],
+      validate: {
+        validator: (items: ICartItem[]) => {
+          const keys = items.map(
+            (item) => `${item.artwork.toString()}:${item.type}`
+          );
+
+          return keys.length === new Set(keys).size;
+        },
+        message:
+          'A cart cannot contain duplicate artwork and item type combinations',
+      },
     },
   },
   {

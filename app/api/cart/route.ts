@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
@@ -5,27 +6,104 @@ import { getIronSession } from 'iron-session';
 import { connectDB } from '@/lib/db';
 import Cart from '@/models/Cart';
 import Artwork from '@/models/Artwork';
+import User from '@/models/User';
 import { sessionOptions, type SessionData } from '@/lib/session';
 
+function jsonError(error: string, status: number) {
+  return NextResponse.json({ error }, { status });
+}
+
+function isValidObjectId(id: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
+
+async function getSession() {
+  const cookieStore = await cookies();
+
+  return getIronSession<SessionData>(
+    cookieStore,
+    sessionOptions
+  );
+}
+
+async function getVerifiedBuyer(sessionUser: SessionData['user']) {
+  if (!sessionUser) {
+    return {
+      error: jsonError('Authentication required', 401),
+    };
+  }
+
+  if (sessionUser.role !== 'buyer') {
+    return {
+      error: jsonError(
+        'Only buyers can access the cart',
+        403
+      ),
+    };
+  }
+
+  if (
+    typeof sessionUser.id !== 'string' ||
+    !isValidObjectId(sessionUser.id)
+  ) {
+    return {
+      error: jsonError('Invalid user session', 401),
+    };
+  }
+
+  const buyer = await User.findById(sessionUser.id)
+    .select('_id role')
+    .lean();
+
+  if (!buyer) {
+    return {
+      error: jsonError('Buyer account not found', 401),
+    };
+  }
+
+  if (buyer.role !== 'buyer') {
+    return {
+      error: jsonError(
+        'Only buyers can access the cart',
+        403
+      ),
+    };
+  }
+
+  return { buyer };
+}
+
+async function populateCart(cartId: unknown) {
+  return Cart.findById(cartId).populate({
+    path: 'items.artwork',
+    populate: {
+      path: 'artist',
+      select: 'name profileImage',
+    },
+  });
+}
+
+// GET /api/cart
 export async function GET() {
   try {
-    await connectDB();
-
-    const cookieStore = await cookies();
-    const session = await getIronSession<SessionData>(
-      cookieStore,
-      sessionOptions
-    );
+    const session = await getSession();
 
     if (!session.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
+      return jsonError('Authentication required', 401);
     }
 
+    await connectDB();
+
+    const result = await getVerifiedBuyer(session.user);
+
+    if (result.error) {
+      return result.error;
+    }
+
+    const buyerId = result.buyer._id;
+
     const cart = await Cart.findOne({
-      user: session.user.id,
+      user: buyerId,
     }).populate({
       path: 'items.artwork',
       populate: {
@@ -36,117 +114,153 @@ export async function GET() {
 
     return NextResponse.json({
       cart: cart || {
-        user: session.user.id,
+        user: buyerId,
         items: [],
       },
     });
   } catch (err) {
     console.error('[GET /api/cart]', err);
 
-    return NextResponse.json(
-      { error: 'Failed to fetch cart' },
-      { status: 500 }
-    );
+    return jsonError('Failed to fetch cart', 500);
   }
 }
 
+// POST /api/cart
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-
-    const cookieStore = await cookies();
-    const session = await getIronSession<SessionData>(
-      cookieStore,
-      sessionOptions
-    );
+    const session = await getSession();
 
     if (!session.user) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
+      return jsonError('Authentication required', 401);
+    }
+
+    await connectDB();
+
+    const result = await getVerifiedBuyer(session.user);
+
+    if (result.error) {
+      return result.error;
+    }
+
+    const buyerId = result.buyer._id;
+
+    let body: unknown;
+
+    try {
+      body = await req.json();
+    } catch {
+      return jsonError('Invalid JSON request body', 400);
+    }
+
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      Array.isArray(body)
+    ) {
+      return jsonError('Invalid request body', 400);
+    }
+
+    const data = body as Record<string, unknown>;
+    const { artworkId, type } = data;
+
+    if (
+      typeof artworkId !== 'string' ||
+      typeof type !== 'string'
+    ) {
+      return jsonError(
+        'Artwork ID and item type are required',
+        400
       );
     }
 
-    if (session.user.role !== 'buyer') {
-      return NextResponse.json(
-        { error: 'Only buyers can add items to the cart' },
-        { status: 403 }
-      );
-    }
-
-    const body = await req.json();
-
-    const artworkId = body.artworkId;
-    const type = body.type;
-
-    if (!artworkId || !type) {
-      return NextResponse.json(
-        { error: 'Artwork ID and item type are required' },
-        { status: 400 }
-      );
+    if (!isValidObjectId(artworkId)) {
+      return jsonError('Invalid artwork ID', 400);
     }
 
     if (type !== 'original' && type !== 'digital_print') {
-      return NextResponse.json(
-        { error: 'Invalid item type' },
-        { status: 400 }
-      );
+      return jsonError('Invalid item type', 400);
     }
 
     const artwork = await Artwork.findById(artworkId);
 
     if (!artwork) {
-      return NextResponse.json(
-        { error: 'Artwork not found' },
-        { status: 404 }
-      );
+      return jsonError('Artwork not found', 404);
     }
 
     if (!artwork.isAvailable) {
-      return NextResponse.json(
-        { error: 'This artwork is currently unavailable' },
-        { status: 400 }
+      return jsonError(
+        'This artwork is currently unavailable',
+        409
       );
     }
 
-    if (type === 'digital_print' && artwork.digitalPrintPrice == null) {
-      return NextResponse.json(
-        { error: 'Digital print is not available for this artwork' },
-        { status: 400 }
-      );
+    if (type === 'digital_print') {
+      const printPrice = Number(artwork.digitalPrintPrice);
+
+      if (
+        artwork.digitalPrintPrice == null ||
+        !Number.isFinite(printPrice) ||
+        printPrice < 0
+      ) {
+        return jsonError(
+          'Digital print is not available for this artwork',
+          400
+        );
+      }
     }
 
-    if (type === 'original' && artwork.stock < 1) {
-      return NextResponse.json(
-        { error: 'This artwork is out of stock' },
-        { status: 400 }
-      );
+    if (type === 'original') {
+      const stock = Number(artwork.stock);
+
+      if (!Number.isSafeInteger(stock) || stock < 0) {
+        console.error(
+          '[POST /api/cart] Invalid artwork stock',
+          artworkId
+        );
+
+        return jsonError(
+          'Stock information is invalid. Please contact support.',
+          500
+        );
+      }
+
+      if (stock < 1) {
+        return jsonError(
+          'This artwork is out of stock',
+          409
+        );
+      }
     }
 
     let cart = await Cart.findOne({
-      user: session.user.id,
+      user: buyerId,
     });
 
     if (!cart) {
       cart = new Cart({
-        user: session.user.id,
+        user: buyerId,
         items: [],
       });
     }
 
-    const existingItem = cart.items.find(
+    const normalizedArtworkId = artwork._id.toString();
+
+    const existingItem = cart.items.some(
       (item) =>
-        item.artwork.toString() === artworkId &&
+        item.artwork.toString().toLowerCase() ===
+          normalizedArtworkId.toLowerCase() &&
         item.type === type
     );
 
     if (existingItem) {
-      return NextResponse.json(
-        { error: 'This item is already in your cart' },
-        { status: 400 }
+      return jsonError(
+        'This item is already in your cart',
+        409
       );
     }
 
+    // Never accept a price or quantity from the client.
+    // New cart items always start with quantity 1.
     cart.items.push({
       artwork: artwork._id,
       type,
@@ -155,13 +269,14 @@ export async function POST(req: NextRequest) {
 
     await cart.save();
 
-    const populatedCart = await Cart.findById(cart._id).populate({
-      path: 'items.artwork',
-      populate: {
-        path: 'artist',
-        select: 'name profileImage',
-      },
-    });
+    const populatedCart = await populateCart(cart._id);
+
+    if (!populatedCart) {
+      return jsonError(
+        'Cart was saved but could not be retrieved',
+        500
+      );
+    }
 
     return NextResponse.json(
       { cart: populatedCart },
@@ -170,9 +285,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[POST /api/cart]', err);
 
-    return NextResponse.json(
-      { error: 'Failed to add item to cart' },
-      { status: 500 }
-    );
+    return jsonError('Failed to add item to cart', 500);
   }
 }
