@@ -8,14 +8,83 @@ import User from '@/models/User';
 import { sessionOptions, type SessionData } from '@/lib/session';
 
 
+function getCloudinaryPublicId(
+  imageUrl: string,
+  cloudName: string
+): string | null {
+  try {
+    const url = new URL(imageUrl);
+
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'res.cloudinary.com'
+    ) {
+      return null;
+    }
+
+    const prefix = `/${cloudName}/image/upload/`;
+
+    if (!url.pathname.startsWith(prefix)) {
+      return null;
+    }
+
+    const parts = url.pathname
+      .slice(prefix.length)
+      .split('/')
+      .filter(Boolean);
+
+    const versionIndex = parts.findIndex((part) => /^v\d+$/.test(part));
+
+    if (versionIndex === -1) {
+      return null;
+    }
+
+    const assetParts = parts
+      .slice(versionIndex + 1)
+      .map((part) => decodeURIComponent(part));
+
+    if (assetParts.length === 0) {
+      return null;
+    }
+
+    const lastIndex = assetParts.length - 1;
+    assetParts[lastIndex] = assetParts[lastIndex].replace(/\.[^.]+$/, '');
+
+    return assetParts.join('/') || null;
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
     const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '12');
-    const skip = (page - 1) * limit;
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
 
+    const page = pageParam === null ? 1 : Number(pageParam);
+    const limit = limitParam === null ? 12 : Number(limitParam);
+
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 48 ||
+      !Number.isSafeInteger((page - 1) * limit)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid pagination parameters' },
+        { status: 400 }
+      );
+    }
+
+    const skip = (page - 1) * limit;
     const query: Record<string, unknown> = { isAvailable: true };
     const medium = searchParams.get('medium');
     const subject = searchParams.get('subject');
@@ -26,22 +95,95 @@ export async function GET(req: NextRequest) {
     const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
 
-    if (medium) query.medium = { $regex: medium, $options: 'i' };
-    if (subject) query.subject = { $regex: subject, $options: 'i' };
-    if (style) query.style = { $regex: style, $options: 'i' };
-    if (artist) query.artist = artist;
+    const searchFilters = [
+      { name: 'medium', value: medium },
+      { name: 'subject', value: subject },
+      { name: 'style', value: style },
+      { name: 'q', value: q },
+    ];
+
+    if (searchFilters.some(({ value }) => value !== null && value.length > 100)) {
+      return NextResponse.json(
+        { error: 'Search filters must not exceed 100 characters' },
+        { status: 400 }
+      );
+    }
+    
+    if (medium) {
+      query.medium = { $regex: escapeRegex(medium), $options: 'i' };
+    }
+    if (subject) {
+      query.subject = { $regex: escapeRegex(subject), $options: 'i' };
+    }
+    if (style) {
+      query.style = { $regex: escapeRegex(style), $options: 'i' };
+    }
+
+    if (artist) {
+      if (!/^[a-fA-F0-9]{24}$/.test(artist)) {
+        return NextResponse.json(
+          { error: 'Invalid artist filter' },
+          { status: 400 }
+        );
+      }
+
+      query.artist = artist;
+    }
     if (collection === 'curators-picks') query.isCuratorsPick = true;
     if (collection === 'featured') query.isFeatured = true;
     if (collection === 'trending') query.isTrending = true;
-    if (q) query.$or = [
-      { title: { $regex: q, $options: 'i' } },
-      { medium: { $regex: q, $options: 'i' } },
-      { subject: { $regex: q, $options: 'i' } },
-    ];
-    if (minPrice || maxPrice) {
-      query.originalPrice = {};
-      if (minPrice) (query.originalPrice as Record<string, number>).$gte = parseInt(minPrice);
-      if (maxPrice) (query.originalPrice as Record<string, number>).$lte = parseInt(maxPrice);
+    if (q) {
+      const safeSearch = escapeRegex(q);
+
+      query.$or = [
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { medium: { $regex: safeSearch, $options: 'i' } },
+        { subject: { $regex: safeSearch, $options: 'i' } },
+      ];
+    }
+    
+    const parsedMinPrice = minPrice === null ? undefined : Number(minPrice);
+    const parsedMaxPrice = maxPrice === null ? undefined : Number(maxPrice);
+
+    if (
+      (minPrice !== null &&
+        (!minPrice.trim() ||
+          !Number.isFinite(parsedMinPrice) ||
+          parsedMinPrice! < 0)) ||
+      (maxPrice !== null &&
+        (!maxPrice.trim() ||
+          !Number.isFinite(parsedMaxPrice) ||
+          parsedMaxPrice! < 0))
+    ) {
+      return NextResponse.json(
+        { error: 'Price filters must be valid non-negative numbers' },
+        { status: 400 }
+      );
+    }
+
+    if (
+      parsedMinPrice !== undefined &&
+      parsedMaxPrice !== undefined &&
+      parsedMinPrice > parsedMaxPrice
+    ) {
+      return NextResponse.json(
+        { error: 'Minimum price cannot exceed maximum price' },
+        { status: 400 }
+      );
+    }
+
+    if (parsedMinPrice !== undefined || parsedMaxPrice !== undefined) {
+      const priceQuery: Record<string, number> = {};
+
+      if (parsedMinPrice !== undefined) {
+        priceQuery.$gte = parsedMinPrice;
+      }
+
+      if (parsedMaxPrice !== undefined) {
+        priceQuery.$lte = parsedMaxPrice;
+      }
+
+      query.originalPrice = priceQuery;
     }
 
     const sortParam = searchParams.get('sort') || 'newest';
@@ -299,13 +441,97 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate images
+
+    // Validate image count and types.
     if (
       !Array.isArray(images) ||
-      images.length === 0
+      images.length === 0 ||
+      images.length > 6 ||
+      !images.every((image: unknown) => typeof image === 'string')
     ) {
       return NextResponse.json(
-        { error: 'At least one image is required' },
+        { error: 'Provide between 1 and 6 valid image URLs' },
         { status: 400 }
+      );
+    }
+
+    const imageUrls = images as string[];
+
+    if (new Set(imageUrls).size !== imageUrls.length) {
+      return NextResponse.json(
+        { error: 'Duplicate image URLs are not allowed' },
+        { status: 400 }
+      );
+    }
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return NextResponse.json(
+        { error: 'Cloudinary is not configured on the server' },
+        { status: 503 }
+      );
+    }
+
+    const publicIds = imageUrls.map((imageUrl) =>
+      getCloudinaryPublicId(imageUrl, cloudName)
+    );
+
+    if (publicIds.some((id) => id === null)) {
+      return NextResponse.json(
+        { error: 'Images must use valid URLs from your Cloudinary account' },
+        { status: 400 }
+      );
+    }
+
+    const cloudinary = (await import('cloudinary')).v2;
+
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+    });
+
+    // Verify that every asset exists and belongs to this artist.
+    const resourceResults = await Promise.allSettled(
+      (publicIds as string[]).map((publicId) =>
+        cloudinary.api.resource(publicId, {
+          resource_type: 'image',
+        })
+      )
+    );
+
+    if (resourceResults.some((result) => result.status === 'rejected')) {
+      console.error(
+        '[POST /api/artworks] Failed to verify Cloudinary assets',
+        resourceResults
+          .filter((result) => result.status === 'rejected')
+          .map((result) =>
+            result.status === 'rejected' ? result.reason : undefined
+          )
+      );
+
+      return NextResponse.json(
+        { error: 'One or more images could not be verified' },
+        { status: 400 }
+      );
+    }
+
+    const artistTag = `artist_${artist._id.toString()}`;
+
+    const ownsAllImages = resourceResults.every(
+      (result) =>
+        result.status === 'fulfilled' &&
+        Array.isArray(result.value.tags) &&
+        result.value.tags.includes(artistTag)
+    );
+
+    if (!ownsAllImages) {
+      return NextResponse.json(
+        { error: 'You can only publish images uploaded by your artist account' },
+        { status: 403 }
       );
     }
 
@@ -314,9 +540,6 @@ export async function POST(req: NextRequest) {
 
     const code = `HF-${Date.now()}-${String(count + 1).padStart(4, '0')}`;
 
-    // IMPORTANT:
-    // artist comes from the authenticated session,
-    // NOT from req.body.
     const artwork = await Artwork.create({
       title: title.trim(),
       description: description?.trim() || undefined,

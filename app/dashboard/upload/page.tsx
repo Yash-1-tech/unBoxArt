@@ -119,9 +119,15 @@ async function uploadImagesDirectly(files: File[]): Promise<string[]> {
   );
 
   if (failures.length > 0) {
+    const failureMessages = failures.map(({ reason }) =>
+      reason instanceof Error
+        ? `${reason.name}: ${reason.message}`
+        : String(reason)
+    );
+
     console.error(
       '[Direct Cloudinary upload failures]',
-      failures.map((result) => result.reason)
+      failureMessages
     );
 
     let cleanupIncomplete = false;
@@ -168,7 +174,7 @@ async function uploadImagesDirectly(files: File[]): Promise<string[]> {
       : '';
 
     throw new Error(
-      `${failures.length} image(s) failed to upload. Please try again.${cleanupMessage}`
+      `${failures.length} image(s) failed to upload: ${failureMessages.join('; ')}. Please try again.${cleanupMessage}`
     );
   }
 
