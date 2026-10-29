@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
-
+import User from '@/models/User';
 import { connectDB } from '@/lib/db';
 import Artwork from '@/models/Artwork';
 import { sessionOptions, type SessionData } from '@/lib/session';
+
+function isValidArtworkId(id: string): boolean {
+  return /^[a-fA-F0-9]{24}$/.test(id);
+}
 
 export async function GET(
   _req: NextRequest,
@@ -14,6 +18,13 @@ export async function GET(
     await connectDB();
 
     const { id } = await params;
+    
+    if (!isValidArtworkId(id)) {
+      return NextResponse.json(
+        { error: 'Invalid artwork ID' },
+        { status: 400 }
+      );
+    }
 
     const artwork = await Artwork.findById(id)
       .populate(
@@ -54,6 +65,13 @@ export async function PATCH(
 
     const { id } = await params;
 
+    if (!isValidArtworkId(id)) {
+      return NextResponse.json(
+        { error: 'Invalid artwork ID' },
+        { status: 400 }
+      );
+    }
+
     // Get authenticated user from server-side session
     const cookieStore = await cookies();
     const session = await getIronSession<SessionData>(
@@ -69,6 +87,22 @@ export async function PATCH(
     }
 
     if (session.user.role !== 'artist') {
+      return NextResponse.json(
+        { error: 'Only artists can edit artwork' },
+        { status: 403 }
+      );
+    }
+
+    const currentUser = await User.findById(session.user.id).select('_id role');
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Artist account not found' },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== 'artist') {
       return NextResponse.json(
         { error: 'Only artists can edit artwork' },
         { status: 403 }
@@ -92,15 +126,55 @@ export async function PATCH(
       );
     }
 
-    const body = await req.json();
+    let body: unknown;
 
-    // Never allow ownership to be changed through PATCH
-    delete body.artist;
-    delete body.code;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
+    
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body)
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid update data' },
+        { status: 400 }
+      );
+    }
+
+    const editableFields = new Set([
+      'title',
+      'description',
+      'medium',
+      'subject',
+      'style',
+      'dimensions',
+      'originalPrice',
+      'digitalPrintPrice',
+      'shippingCost',
+      'stock',
+    ]);
+
+    const updateData = Object.fromEntries(
+      Object.entries(body).filter(([key]) => editableFields.has(key))
+    );
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: 'No permitted fields provided for update' },
+        { status: 400 }
+      );
+    }
 
     const updatedArtwork = await Artwork.findByIdAndUpdate(
       id,
-      body,
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -124,6 +198,13 @@ export async function DELETE(
 
     const { id } = await params;
 
+    if (!isValidArtworkId(id)) {
+      return NextResponse.json(
+        { error: 'Invalid artwork ID' },
+        { status: 400 }
+      );
+    }
+
     // Get authenticated user from server-side session
     const cookieStore = await cookies();
     const session = await getIronSession<SessionData>(
@@ -139,6 +220,22 @@ export async function DELETE(
     }
 
     if (session.user.role !== 'artist') {
+      return NextResponse.json(
+        { error: 'Only artists can delete artwork' },
+        { status: 403 }
+      );
+    }
+
+    const currentUser = await User.findById(session.user.id).select('_id role');
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Artist account not found' },
+        { status: 401 }
+      );
+    }
+
+    if (currentUser.role !== 'artist') {
       return NextResponse.json(
         { error: 'Only artists can delete artwork' },
         { status: 403 }
