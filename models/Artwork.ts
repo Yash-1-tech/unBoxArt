@@ -1,3 +1,4 @@
+
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IReview {
@@ -17,7 +18,11 @@ export interface IArtwork extends Document {
   subject?: string;
   style?: string;
   color?: string[];
-  dimensions: { width: number; height: number; unit: 'in' | 'cm' };
+  dimensions: {
+    width: number;
+    height: number;
+    unit: 'in' | 'cm';
+  };
   originalPrice: number;
   digitalPrintPrice?: number;
   shippingCost: number;
@@ -37,58 +42,333 @@ export interface IArtwork extends Document {
   updatedAt: Date;
 }
 
+const nonNegativeNumber = {
+  validator: (value: number) =>
+    Number.isFinite(value) && value >= 0,
+  message: 'Value must be a valid non-negative number',
+};
+
+const positiveNumber = {
+  validator: (value: number) =>
+    Number.isFinite(value) && value > 0,
+  message: 'Value must be a valid positive number',
+};
+
+const nonNegativeInteger = {
+  validator: (value: number) =>
+    Number.isSafeInteger(value) && value >= 0,
+  message: 'Value must be a non-negative integer',
+};
+
 const ReviewSchema = new Schema<IReview>({
-  user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  rating: { type: Number, required: true, min: 1, max: 5 },
-  comment: { type: String },
-  createdAt: { type: Date, default: Date.now },
+  user: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+
+  rating: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 5,
+    validate: {
+      validator: (value: number) =>
+        Number.isInteger(value) && value >= 1 && value <= 5,
+      message: 'Rating must be an integer between 1 and 5',
+    },
+  },
+
+  comment: {
+    type: String,
+    trim: true,
+    maxlength: 1000,
+    default: '',
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 const ArtworkSchema = new Schema<IArtwork>(
   {
-    title: { type: String, required: true, trim: true },
-    code: { type: String, required: true, unique: true, uppercase: true },
-    description: { type: String },
-    images: [{ type: String, required: true }],
-    artist: { type: Schema.Types.ObjectId, ref: 'User', required: false },
-    medium: { type: String, required: true },
-    subject: { type: String },
-    style: { type: String },
-    color: [{ type: String }],
-    dimensions: {
-      width: { type: Number, required: true },
-      height: { type: Number, required: true },
-      unit: { type: String, enum: ['in', 'cm'], default: 'in' },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 150,
     },
-    originalPrice: { type: Number, required: true },
-    digitalPrintPrice: { type: Number },
-    shippingCost: { type: Number, default: 50 },
-    stock: { type: Number, default: 1 },
-    isAvailable: { type: Boolean, default: true },
-    isFeatured: { type: Boolean, default: false },
-    isCuratorsPick: { type: Boolean, default: false },
-    isTrending: { type: Boolean, default: false },
-    category: { type: String },
-    tags: [{ type: String }],
-    likes: { type: Number, default: 0 },
-    views: { type: Number, default: 0 },
-    reviews: [ReviewSchema],
-    avgRating: { type: Number, default: 0 },
-    reviewCount: { type: Number, default: 0 },
+
+    code: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+      maxlength: 80,
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 5000,
+    },
+
+    images: {
+      type: [
+        {
+          type: String,
+          required: true,
+          trim: true,
+          maxlength: 2048,
+        },
+      ],
+      required: true,
+      validate: {
+        validator: (images: string[]) =>
+          Array.isArray(images) &&
+          images.length >= 1 &&
+          images.length <= 6 &&
+          images.every(
+            (image) =>
+              typeof image === 'string' &&
+              image.trim().length > 0
+          ),
+        message: 'Artwork must have between 1 and 6 valid images',
+      },
+    },
+
+    artist: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+
+    medium: {
+      type: String,
+      required: true,
+      enum: [
+        'Acrylic',
+        'Oil',
+        'Watercolor',
+        'Pencil',
+        'Digital',
+        'Mixed Media',
+      ],
+    },
+
+    subject: {
+      type: String,
+      enum: [
+        'Abstract',
+        'Landscape',
+        'Portrait',
+        'Still Life',
+        'Wildlife',
+        'Religious',
+      ],
+    },
+
+    style: {
+      type: String,
+      enum: [
+        'Modern',
+        'Contemporary',
+        'Impressionist',
+        'Realist',
+        'Expressionist',
+      ],
+    },
+
+    color: {
+      type: [
+        {
+          type: String,
+          trim: true,
+          maxlength: 50,
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (colors: string[]) =>
+          Array.isArray(colors) && colors.length <= 10,
+        message: 'An artwork cannot have more than 10 colors',
+      },
+    },
+
+    dimensions: {
+      width: {
+        type: Number,
+        required: true,
+        min: 0,
+        validate: positiveNumber,
+      },
+
+      height: {
+        type: Number,
+        required: true,
+        min: 0,
+        validate: positiveNumber,
+      },
+
+      unit: {
+        type: String,
+        enum: ['in', 'cm'],
+        default: 'in',
+        required: true,
+      },
+    },
+
+    originalPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+      validate: nonNegativeNumber,
+    },
+
+    digitalPrintPrice: {
+      type: Number,
+      min: 0,
+      validate: nonNegativeNumber,
+    },
+
+    shippingCost: {
+      type: Number,
+      default: 50,
+      min: 0,
+      validate: nonNegativeNumber,
+    },
+
+    stock: {
+      type: Number,
+      default: 1,
+      min: 0,
+      validate: nonNegativeInteger,
+    },
+
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
+
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+
+    isCuratorsPick: {
+      type: Boolean,
+      default: false,
+    },
+
+    isTrending: {
+      type: Boolean,
+      default: false,
+    },
+
+    category: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+
+    tags: {
+      type: [
+        {
+          type: String,
+          trim: true,
+          maxlength: 50,
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (tags: string[]) =>
+          Array.isArray(tags) && tags.length <= 30,
+        message: 'An artwork cannot have more than 30 tags',
+      },
+    },
+
+    likes: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: nonNegativeInteger,
+    },
+
+    views: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: nonNegativeInteger,
+    },
+
+    reviews: {
+      type: [ReviewSchema],
+      default: [],
+      validate: {
+        validator: (reviews: IReview[]) => {
+          if (!Array.isArray(reviews)) {
+            return false;
+          }
+
+          const reviewerIds = reviews.map(
+            (review) => review.user.toString()
+          );
+
+          return (
+            reviewerIds.length ===
+            new Set(reviewerIds).size
+          );
+        },
+        message: 'A buyer can only review an artwork once',
+      },
+    },
+
+    avgRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+      validate: nonNegativeNumber,
+    },
+
+    reviewCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: nonNegativeInteger,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-ArtworkSchema.pre('save', function (next) {
-  if (this.reviews && this.reviews.length > 0) {
-    const total = this.reviews.reduce((sum, r) => sum + r.rating, 0);
-    this.avgRating = Math.round((total / this.reviews.length) * 10) / 10;
-    this.reviewCount = this.reviews.length;
+// Keep review statistics synchronized whenever an artwork
+// document is saved through Mongoose document operations.
+ArtworkSchema.pre('save', function () {
+  const reviews = this.reviews || [];
+
+  this.reviewCount = reviews.length;
+
+  if (reviews.length === 0) {
+    this.avgRating = 0;
+    return;
   }
-  next();
+
+  const total = reviews.reduce(
+    (sum, review) => sum + review.rating,
+    0
+  );
+
+  this.avgRating =
+    Math.round((total / reviews.length) * 10) / 10;
 });
 
 const Artwork: Model<IArtwork> =
-  mongoose.models.Artwork || mongoose.model<IArtwork>('Artwork', ArtworkSchema);
+  mongoose.models.Artwork ||
+  mongoose.model<IArtwork>('Artwork', ArtworkSchema);
 
 export default Artwork;

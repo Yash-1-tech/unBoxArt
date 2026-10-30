@@ -29,7 +29,7 @@ export interface IOrder extends Document {
   shippingCost: number;
   discount: number;
   total: number;
-  paymentMethod: string;
+  paymentMethod: 'razorpay' | 'upi' | 'netbanking' | 'cod';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   razorpayOrderId?: string;
   paymentReference?: string;
@@ -53,52 +53,113 @@ export interface IOrder extends Document {
   updatedAt: Date;
 }
 
+const nonNegativeNumber = {
+  validator: (value: number) =>
+    Number.isFinite(value) && value >= 0,
+  message: 'Value must be a valid non-negative number',
+};
+
 const OrderItemSchema = new Schema<IOrderItem>({
   artwork: {
     type: Schema.Types.ObjectId,
     ref: 'Artwork',
     required: true,
   },
+
   type: {
     type: String,
     enum: ['original', 'digital_print'],
     required: true,
   },
-  printMedium: String,
-  printSize: String,
-  quantity: { type: Number, required: true, min: 1, default: 1,},
-  price: {type: Number, required: true,},
+
+  printMedium: {
+    type: String,
+    trim: true,
+    maxlength: 100,
+  },
+
+  printSize: {
+    type: String,
+    trim: true,
+    maxlength: 100,
+  },
+
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1,
+    default: 1,
+    validate: {
+      validator: (value: number) =>
+        Number.isSafeInteger(value) && value >= 1,
+      message: 'Quantity must be a positive safe integer',
+    },
+  },
+
+  price: {
+    type: Number,
+    required: true,
+    min: 0,
+    validate: nonNegativeNumber,
+  },
 });
 
 const ShippingAddressSchema = new Schema<IShippingAddress>({
   fullName: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 120,
   },
+
   phone: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 30,
   },
+
   addressLine1: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 200,
   },
-  addressLine2: String,
+
+  addressLine2: {
+    type: String,
+    trim: true,
+    maxlength: 200,
+  },
+
   city: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 100,
   },
+
   state: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 100,
   },
+
   pincode: {
     type: String,
     required: true,
+    validate: {
+      validator: (value: string) => /^\d{6}$/.test(value),
+      message: 'Pincode must contain exactly 6 digits',
+    },
   },
+
   country: {
     type: String,
     required: true,
+    trim: true,
+    maxlength: 100,
     default: 'India',
   },
 });
@@ -109,66 +170,114 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       required: true,
       unique: true,
+      trim: true,
     },
+
     buyer: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
-    items: [OrderItemSchema],
-    shippingAddress: ShippingAddressSchema,
+
+    items: {
+      type: [OrderItemSchema],
+      required: true,
+      validate: {
+        validator: (items: IOrderItem[]) =>
+          Array.isArray(items) && items.length > 0,
+        message: 'An order must contain at least one item',
+      },
+    },
+
+    shippingAddress: {
+      type: ShippingAddressSchema,
+      required: true,
+    },
+
     subtotal: {
       type: Number,
       required: true,
+      min: 0,
+      validate: nonNegativeNumber,
     },
+
     shippingCost: {
       type: Number,
       required: true,
       default: 0,
+      min: 0,
+      validate: nonNegativeNumber,
     },
+
     discount: {
       type: Number,
       default: 0,
+      min: 0,
+      validate: nonNegativeNumber,
     },
+
     total: {
       type: Number,
       required: true,
+      min: 0,
+      validate: nonNegativeNumber,
     },
+
     paymentMethod: {
       type: String,
+      enum: ['razorpay', 'upi', 'netbanking', 'cod'],
       required: true,
     },
+
     paymentStatus: {
       type: String,
       enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'pending',
     },
+
     razorpayOrderId: String,
     paymentReference: String,
+
     refundStatus: {
       type: String,
       enum: ['pending', 'processed', 'failed'],
     },
+
     refundReference: String,
     refundIdempotencyKey: String,
     refundError: String,
+
     inventoryAdjusted: {
       type: Boolean,
       default: false,
     },
-    inventoryReservationExpiresAt: {
-      type: Date,
-    },
-    inventoryReleasedAt: {
-      type: Date,
-    },
+
+    inventoryReservationExpiresAt: Date,
+    inventoryReleasedAt: Date,
+
     orderStatus: {
       type: String,
-      enum: ['placed','confirmed','shipped','delivered','cancelled','returned',],
+      enum: [
+        'placed',
+        'confirmed',
+        'shipped',
+        'delivered',
+        'cancelled',
+        'returned',
+      ],
       default: 'placed',
     },
-    trackingNumber: String,
-    notes: String,
+
+    trackingNumber: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+    },
+
+    notes: {
+      type: String,
+      maxlength: 2000,
+    },
   },
   {
     timestamps: true,
