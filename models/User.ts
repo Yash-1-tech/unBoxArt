@@ -62,8 +62,6 @@ const UserSchema = new Schema<IUser>(
       ],
     },
 
-    // Optional to support Google OAuth accounts.
-    // Excluded from normal Mongoose queries.
     password: {
       type: String,
       select: false,
