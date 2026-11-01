@@ -83,7 +83,8 @@ export default function SellerOrders({ artistId }: { artistId: string }) {
 
       try {
         const res = await fetch(
-          `/api/orders/seller?artistId=${encodeURIComponent(artistId)}`
+          `/api/orders/seller?artistId=${encodeURIComponent(artistId)}`,
+          { cache: 'no-store' }
         );
         const data = await res.json();
 

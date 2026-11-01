@@ -85,7 +85,20 @@ export async function GET(req: NextRequest) {
     }
 
     const skip = (page - 1) * limit;
-    const query: Record<string, unknown> = { isAvailable: true };
+    const mineParam = searchParams.get('mine');
+
+    if (mineParam !== null && mineParam !== '1') {
+      return NextResponse.json(
+        { error: 'Invalid artwork visibility parameter' },
+        { status: 400 }
+      );
+    }
+
+    const includeUnavailable = mineParam === '1';
+
+    const query: Record<string, unknown> = includeUnavailable
+      ? {}
+      : { isAvailable: true };
     const medium = searchParams.get('medium');
     const subject = searchParams.get('subject');
     const style = searchParams.get('style');
@@ -127,7 +140,55 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      query.artist = artist;
+      if (includeUnavailable) {
+        const session = await getIronSession<SessionData>(
+          await cookies(),
+          sessionOptions
+        );
+
+        if (
+          !session.user?.id ||
+          !/^[a-fA-F0-9]{24}$/.test(session.user.id)
+        ) {
+          return NextResponse.json(
+            { error: 'Authentication required' },
+            { status: 401 }
+          );
+        }
+
+        if (
+          session.user.role !== 'artist' ||
+          session.user.id.toLowerCase() !== artist.toLowerCase()
+        ) {
+          return NextResponse.json(
+            { error: 'You are not authorized to view these artworks' },
+            { status: 403 }
+          );
+        }
+
+        const verifiedArtist = await User.findById(session.user.id)
+          .select('_id role')
+          .lean();
+
+        if (!verifiedArtist || verifiedArtist.role !== 'artist') {
+          session.destroy();
+
+          return NextResponse.json(
+            { error: 'Artist account not found or no longer authorized' },
+            { status: 403 }
+          );
+        }
+
+        query.artist = verifiedArtist._id;
+      } else {
+        // Public artist profiles only show available artworks.
+        query.artist = artist;
+      }
+    } else if (includeUnavailable) {
+      return NextResponse.json(
+        { error: 'Artist ID is required' },
+        { status: 400 }
+      );
     }
     if (collection === 'curators-picks') query.isCuratorsPick = true;
     if (collection === 'featured') query.isFeatured = true;

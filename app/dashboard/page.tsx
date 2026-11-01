@@ -168,27 +168,49 @@ export default function DashboardPage() {
       setArtworksLoading(true);
       setArtworksError('');
       try {
-        const params = new URLSearchParams();
-        params.set('artist', user.id);
-        params.set('limit', '100');
-        params.set('sort', 'newest');
-        const response = await fetch(
-          `/api/artworks?${params.toString()}`
-        );
+        const allArtworks: Artwork[] = [];
+        let page = 1;
+        let hasMore = true;
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(
-            data.error || 'Failed to load your artworks'
+        while (hasMore) {
+          const params = new URLSearchParams();
+          params.set('artist', user.id);
+          params.set('mine', '1');
+          params.set('limit', '48');
+          params.set('page', String(page));
+          params.set('sort', 'newest');
+
+          const response = await fetch(
+            `/api/artworks?${params.toString()}`,
+            { cache: 'no-store' }
           );
+
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              data.error || 'Failed to load your artworks'
+            );
+          }
+
+          if (!Array.isArray(data.artworks)) {
+            throw new Error('Invalid artwork response from server');
+          }
+
+          allArtworks.push(...data.artworks);
+
+          hasMore = data.hasMore === true;
+          page += 1;
+
+          // Prevent an unexpected empty-page loop.
+          if (data.artworks.length === 0) {
+            break;
+          }
         }
 
-        setArtworks(data.artworks || []);
+        setArtworks(allArtworks);
       } catch (error) {
-        console.error(
-          'Failed to fetch artist artworks:',
-          error
-        );
+        console.error('Failed to fetch artist artworks:', error);
 
         setArtworksError(
           error instanceof Error
@@ -199,6 +221,7 @@ export default function DashboardPage() {
         setArtworksLoading(false);
       }
     };
+
     fetchArtworks();
   }, [user]);
 
