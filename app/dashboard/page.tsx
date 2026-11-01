@@ -109,15 +109,6 @@ export default function DashboardPage() {
     }
   }, [loading, user, router]);
 
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-gray-500">
-          {loading ? 'Checking your session...' : 'Redirecting to sign in...'}
-        </p>
-      </div>
-    );
-  }
 
   useEffect(() => {
     const params = new URLSearchParams(
@@ -143,6 +134,16 @@ export default function DashboardPage() {
     location: '',
     website: '',
   });
+
+  useEffect(() => {
+    if (!user) return;
+
+    setProfileData((prev) => ({
+      ...prev,
+      fullName: user.name || '',
+      email: user.email || '',
+    }));
+  }, [user?.id, user?.name, user?.email]);
 
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -254,6 +255,16 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [user]);
+
+    if (loading || !user) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="text-sm text-gray-500">
+          {loading ? 'Checking your session...' : 'Redirecting to sign in...'}
+        </p>
+      </div>
+    );
+  }
 
   const handleCancelOrder = async (order: DashboardOrder) => {
     const confirmed = window.confirm(
