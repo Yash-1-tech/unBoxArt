@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react';
+
+import { signOut } from 'next-auth/react';
 
 export interface SessionUser {
   id: string;
@@ -25,13 +33,20 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', {
+        cache: 'no-store',
+      });
+
       if (res.ok) {
         const data = await res.json();
         setUser(data.user || null);
@@ -46,21 +61,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetchUser();
+    void fetchUser();
   }, [fetchUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
+    setLoading(true);
+
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      // Clear both authentication sessions.
+      const [ironResult, nextAuthResult] =
+        await Promise.allSettled([
+          fetch('/api/auth/logout', {
+            method: 'POST',
+            cache: 'no-store',
+          }),
+          signOut({ redirect: false }),
+        ]);
+
+      const ironSessionCleared =
+        ironResult.status === 'fulfilled' &&
+        ironResult.value.ok;
+
+      const nextAuthSessionCleared =
+        nextAuthResult.status === 'fulfilled';
+
+      if (
+        !ironSessionCleared ||
+        !nextAuthSessionCleared
+      ) {
+        throw new Error('One or more sessions could not be cleared');
+      }
+
       setUser(null);
-      window.location.href = '/';
-    } catch {
-      console.error('Logout failed');
+
+      window.location.assign('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+
+      // Restore the actual authentication state if logout fails.
+      await fetchUser();
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchUser]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refetch: fetchUser, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        refetch: fetchUser,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

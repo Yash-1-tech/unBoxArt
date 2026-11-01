@@ -13,17 +13,28 @@ export interface SessionData {
   user?: SessionUser;
 }
 
+// Prefer a dedicated session secret.
+// NEXTAUTH_SECRET remains a compatibility fallback.
+const sessionPassword =
+  process.env.IRON_SESSION_PASSWORD ||
+  process.env.NEXTAUTH_SECRET;
+
+if (!sessionPassword || sessionPassword.trim().length < 32) {
+  throw new Error(
+    'IRON_SESSION_PASSWORD or NEXTAUTH_SECRET must be configured with at least 32 characters.'
+  );
+}
+
 export const sessionOptions: SessionOptions = {
-  password:
-    process.env.NEXTAUTH_SECRET ||
-    'fallback-secret-must-be-32-chars-long!!',
+  password: sessionPassword,
 
   cookieName: 'unboxarts-session',
 
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 7,
     httpOnly: true,
     sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
   },
 };
