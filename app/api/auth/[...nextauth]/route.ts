@@ -4,7 +4,20 @@ import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
-import { sessionOptions, type SessionData } from '@/lib/session';
+
+import {
+  sessionOptions,
+  type SessionData,
+} from '@/lib/session';
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: number }).code === 11000
+  );
+}
 
 const handler = NextAuth({
   providers: [
@@ -13,52 +26,135 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+
   callbacks: {
-    async signIn({ user, account }) {
-      console.log('OAuth signIn started');
-      console.log('Provider:', account?.provider);
-      console.log('User email:', user.email);
+    async signIn({ user, account, profile }) {
+      // This application currently supports Google OAuth only.
+      if (account?.provider !== 'google') {
+        return false;
+      }
 
-      if (account?.provider === 'google') {
-        try {
-          await connectDB();
-          let dbUser = await User.findOne({ email: user.email });
+      const googleProfile = profile as
+        | {
+            email?: unknown;
+            email_verified?: unknown;
+          }
+        | undefined;
 
-          if (!dbUser) {
+      // Require Google's verified email claim.
+      if (googleProfile?.email_verified !== true) {
+        console.error('[Google OAuth] Email verification failed');
+        return false;
+      }
+
+      const email =
+        typeof user.email === 'string'
+          ? user.email.trim().toLowerCase()
+          : '';
+
+      const profileEmail =
+        typeof googleProfile.email === 'string'
+          ? googleProfile.email.trim().toLowerCase()
+          : '';
+
+      // Require a valid, matching email from both OAuth objects.
+      if (
+        !email ||
+        !profileEmail ||
+        email !== profileEmail ||
+        email.length > 254
+      ) {
+        console.error('[Google OAuth] Invalid email information');
+        return false;
+      }
+
+      try {
+        await connectDB();
+
+        let dbUser = await User.findOne({ email });
+
+        if (!dbUser) {
+          const name =
+            typeof user.name === 'string' && user.name.trim()
+              ? user.name.trim().slice(0, 100)
+              : email.split('@')[0].slice(0, 100);
+
+          const profileImage =
+            typeof user.image === 'string' &&
+            user.image.length <= 2048
+              ? user.image
+              : undefined;
+
+          try {
+            // New Google accounts always start as buyers.
             dbUser = await User.create({
-              name: user.name,
-              email: user.email,
-              profileImage: user.image,
+              name,
+              email,
+              profileImage,
               role: 'buyer',
               membershipTier: 'free',
               isVerified: true,
             });
-          }
+          } catch (createError) {
+            // Handle simultaneous first-time sign-ins.
+            if (!isDuplicateKeyError(createError)) {
+              throw createError;
+            }
 
-          // Set iron-session cookie so our app recognises the login
-          const cookieStore = await cookies();
-          const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
-          session.user = {
-            id: dbUser._id.toString(),
-            name: dbUser.name,
-            email: dbUser.email,
-            role: dbUser.role,
-            membershipTier: dbUser.membershipTier,
-            profileImage: dbUser.profileImage,
-          };
-          await session.save();
-        } catch (err) {
-          console.error('Google sign-in error:', err);
+            dbUser = await User.findOne({ email });
+
+            if (!dbUser) {
+              throw createError;
+            }
+          }
+        }
+
+        // Reject unexpected database roles.
+        if (
+          dbUser.role !== 'buyer' &&
+          dbUser.role !== 'artist'
+        ) {
+          console.error('[Google OAuth] Invalid database role');
           return false;
         }
+
+        // Preserve the existing database role and membership.
+        const cookieStore = await cookies();
+
+        const session = await getIronSession<SessionData>(
+          cookieStore,
+          sessionOptions
+        );
+
+        session.user = {
+          id: dbUser._id.toString(),
+          name: dbUser.name,
+          email: dbUser.email,
+          role: dbUser.role,
+          membershipTier: dbUser.membershipTier || 'free',
+          profileImage: dbUser.profileImage,
+        };
+
+        await session.save();
+
+        return true;
+      } catch (err) {
+        // Avoid logging OAuth tokens or personal account details.
+        console.error(
+          '[Google OAuth] Sign-in failed:',
+          err instanceof Error ? err.name : 'Unknown error'
+        );
+
+        return false;
       }
-      return true;
     },
   },
+
   pages: {
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
+
   secret: process.env.NEXTAUTH_SECRET,
 });
 
