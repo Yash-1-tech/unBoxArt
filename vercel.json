@@ -3,8 +3,5 @@
   "buildCommand": "next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
-  "regions": ["bom1"],
-  "env": {
-    "NEXTAUTH_URL": "https://your-domain.vercel.app"
-  }
+  "regions": ["bom1"]
 }

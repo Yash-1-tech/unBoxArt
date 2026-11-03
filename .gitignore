@@ -36,3 +36,4 @@ write_files.py
 .env.local
 
 .gitignore
+.env*
