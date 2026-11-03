@@ -708,19 +708,23 @@ export async function PATCH(
       );
     }
 
-    if (
-      requestedStatus !== undefined &&
-      (
+    if (requestedStatus !== undefined) {
+      const unpaidNonCodOrder =
+        order.paymentMethod !== 'cod' &&
+        order.paymentStatus !== 'paid';
+
+      const failedOrRefundedOrder =
         order.paymentStatus === 'failed' ||
         order.paymentStatus === 'refunded' ||
         order.refundStatus === 'pending' ||
-        order.refundStatus === 'processed'
-      )
-    ) {
-      return jsonError(
-        'This order cannot advance while payment has failed or a refund is pending or completed',
-        400
-      );
+        order.refundStatus === 'processed';
+
+      if (unpaidNonCodOrder || failedOrRefundedOrder) {
+        return jsonError(
+          'This order cannot advance until payment is confirmed and any refund issues are resolved',
+          400
+        );
+      }
     }
 
     if (requestedStatus !== undefined) {
