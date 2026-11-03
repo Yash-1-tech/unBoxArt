@@ -20,6 +20,31 @@ export interface IShippingAddress {
   country: string;
 }
 
+export type EmailDeliveryStatus =
+  | 'pending'
+  | 'sending'
+  | 'sent'
+  | 'failed';
+
+export interface IEmailDeliveryState {
+  status: EmailDeliveryStatus;
+  attempts: number;
+  lastAttemptAt?: Date;
+  sentAt?: Date;
+  leaseUntil?: Date;
+  lastError?: string;
+}
+
+export interface IArtistEmailDeliveryState
+  extends IEmailDeliveryState {
+  artist: mongoose.Types.ObjectId;
+}
+
+export interface IOrderEmailNotifications {
+  buyerConfirmation: IEmailDeliveryState;
+  artistSales: IArtistEmailDeliveryState[];
+}
+
 export interface IOrder extends Document {
   orderNumber: string;
   buyer: mongoose.Types.ObjectId;
@@ -37,6 +62,7 @@ export interface IOrder extends Document {
   refundReference?: string;
   refundIdempotencyKey?: string;
   refundError?: string;
+  emailNotifications?: IOrderEmailNotifications;
   orderStatus:
     | 'placed'
     | 'confirmed'
@@ -164,6 +190,120 @@ const ShippingAddressSchema = new Schema<IShippingAddress>({
   },
 });
 
+const emailDeliveryFields = {
+  status: {
+    type: String,
+    enum: ['pending', 'sending', 'sent', 'failed'],
+    default: 'pending',
+  },
+
+  attempts: {
+    type: Number,
+    default: 0,
+    min: 0,
+    validate: {
+      validator: (value: number) =>
+        Number.isSafeInteger(value) && value >= 0,
+      message: 'Attempts must be a non-negative safe integer',
+    },
+  },
+
+  lastAttemptAt: Date,
+  sentAt: Date,
+  leaseUntil: Date,
+
+  lastError: {
+    type: String,
+    trim: true,
+    maxlength: 1000,
+  },
+};
+
+const EmailDeliveryStateSchema = new Schema(
+  {
+    status: {
+      type: String,
+      enum: ['pending', 'sending', 'sent', 'failed'],
+      default: 'pending',
+    },
+
+    attempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: (value: number) =>
+          Number.isSafeInteger(value) && value >= 0,
+        message: 'Attempts must be a non-negative safe integer',
+      },
+    },
+
+    lastAttemptAt: Date,
+    sentAt: Date,
+    leaseUntil: Date,
+
+    lastError: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
+  },
+  { _id: false }
+);
+
+const ArtistEmailDeliveryStateSchema = new Schema(
+  {
+    artist: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ['pending', 'sending', 'sent', 'failed'],
+      default: 'pending',
+    },
+
+    attempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: (value: number) =>
+          Number.isSafeInteger(value) && value >= 0,
+        message: 'Attempts must be a non-negative safe integer',
+      },
+    },
+
+    lastAttemptAt: Date,
+    sentAt: Date,
+    leaseUntil: Date,
+
+    lastError: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
+  },
+  { _id: false }
+);
+
+const OrderEmailNotificationsSchema = new Schema(
+  {
+    buyerConfirmation: {
+      type: EmailDeliveryStateSchema,
+      default: () => ({}),
+    },
+
+    artistSales: {
+      type: [ArtistEmailDeliveryStateSchema],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
 const OrderSchema = new Schema<IOrder>(
   {
     orderNumber: {
@@ -246,6 +386,11 @@ const OrderSchema = new Schema<IOrder>(
     refundReference: String,
     refundIdempotencyKey: String,
     refundError: String,
+      
+    emailNotifications: {
+      type: OrderEmailNotificationsSchema,
+      default: () => ({}),
+    },
 
     inventoryAdjusted: {
       type: Boolean,

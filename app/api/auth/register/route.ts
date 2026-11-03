@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '@/lib/db';
@@ -11,7 +10,6 @@ function jsonError(error: string, status: number) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Parse request safely.
     let body: unknown;
 
     try {
@@ -31,7 +29,6 @@ export async function POST(req: NextRequest) {
     const data = body as Record<string, unknown>;
     const { name, email, password } = data;
 
-    // Validate required fields.
     if (
       typeof name !== 'string' ||
       typeof email !== 'string' ||
@@ -68,7 +65,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // bcrypt only processes up to 72 UTF-8 bytes.
     if (Buffer.byteLength(password, 'utf8') > 72) {
       return jsonError(
         'Password must not exceed 72 UTF-8 bytes',
@@ -78,7 +74,6 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    // Check for an existing account.
     const existing = await User.findOne({
       email: normalizedEmail,
     }).select('_id');
@@ -90,12 +85,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Hash the password before storing it.
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Public registration always creates a buyer account.
-    // Artist privileges must be granted through a trusted
-    // server-side approval or account-management process.
     const user = await User.create({
       name: normalizedName,
       email: normalizedEmail,
@@ -105,18 +96,24 @@ export async function POST(req: NextRequest) {
       isVerified: false,
     });
 
-    // Send welcome email without blocking registration.
-    sendWelcomeEmail(
-      normalizedName,
-      normalizedEmail
-    ).catch((emailError) => {
+    try {
+      const emailSent = await sendWelcomeEmail(
+        normalizedName,
+        normalizedEmail
+      );
+
+      if (!emailSent) {
+        console.info(
+          '[Registration welcome email] Delivery skipped or unsuccessful.'
+        );
+      }
+    } catch (emailError) {
       console.error(
         '[Registration welcome email]',
         emailError
       );
-    });
+    }
 
-    // Never return password or password hash.
     const safeUser = {
       _id: user._id.toString(),
       name: user.name,
@@ -140,8 +137,6 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error('[POST /api/auth/register]', err);
 
-    // Handle duplicate email registrations, including
-    // simultaneous requests that pass the initial lookup.
     if (
       typeof err === 'object' &&
       err !== null &&
