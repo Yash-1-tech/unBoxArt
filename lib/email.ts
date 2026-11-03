@@ -1,14 +1,20 @@
-// Email utility using Resend.
-// Email delivery remains optional until the project owner configures
-// a verified sending domain and API key.
+type OrderPaymentMethod =
+  | 'razorpay'
+  | 'upi'
+  | 'netbanking'
+  | 'cod';
 
 interface EmailOptions {
   to: string;
   subject: string;
   html: string;
+  idempotencyKey?: string;
 }
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
+
+const DEFAULT_APP_URL = 'https://unboxarts.vercel.app';
+
 
 function escapeHtml(value: string): string {
   const entities: Record<string, string> = {
@@ -26,10 +32,9 @@ function escapeHtml(value: string): string {
 
 function getAppUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  const fallbackUrl = 'https://unboxarts.vercel.app';
 
   if (!configuredUrl) {
-    return fallbackUrl;
+    return DEFAULT_APP_URL;
   }
 
   try {
@@ -39,38 +44,131 @@ function getAppUrl(): string {
       parsedUrl.protocol !== 'https:' &&
       parsedUrl.protocol !== 'http:'
     ) {
-      return fallbackUrl;
+      return DEFAULT_APP_URL;
     }
 
     return parsedUrl.origin;
   } catch {
-    return fallbackUrl;
+    return DEFAULT_APP_URL;
   }
 }
 
 function formatINR(amount: number): string {
   const safeAmount = Number.isFinite(amount) ? amount : 0;
+
   return `₹${safeAmount.toLocaleString('en-IN')}`;
 }
 
 function safeSubject(subject: string): string {
-  return subject.replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
+  return subject
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 200);
 }
+
+function getBuyerPaymentDetails(paymentMethod: OrderPaymentMethod) {
+  switch (paymentMethod) {
+    case 'razorpay':
+      return {
+        subjectPrefix: 'Order Confirmed',
+        paymentLabel: 'Online payment',
+        paymentNotice:
+          'Your online payment has been successfully verified.',
+        fulfillmentNotice:
+          'The artist will prepare your artwork and ship it within 3–5 business days. You will receive a tracking number when it is dispatched.',
+      };
+
+    case 'cod':
+      return {
+        subjectPrefix: 'Order Received',
+        paymentLabel: 'Cash on Delivery',
+        paymentNotice:
+          'Your order is Cash on Delivery. Payment is due when the artwork is delivered.',
+        fulfillmentNotice:
+          'The artist will prepare your artwork and ship it within 3–5 business days. Please keep the payment amount ready for delivery.',
+      };
+
+    case 'upi':
+      return {
+        subjectPrefix: 'Order Received',
+        paymentLabel: 'Manual UPI',
+        paymentNotice:
+          'Your order has been received. Your manual UPI payment is awaiting verification.',
+        fulfillmentNotice:
+          'The artist will be notified once your payment has been verified. Please check your order status for updates.',
+      };
+
+    case 'netbanking':
+      return {
+        subjectPrefix: 'Order Received',
+        paymentLabel: 'Bank transfer',
+        paymentNotice:
+          'Your order has been received. Your bank transfer is awaiting payment verification.',
+        fulfillmentNotice:
+          'The artist will be notified once your payment has been verified. Please check your order status for updates.',
+      };
+  }
+}
+
+function getArtistPaymentDetails(paymentMethod: OrderPaymentMethod) {
+  switch (paymentMethod) {
+    case 'razorpay':
+      return {
+        subjectPrefix: 'New Sale',
+        heading: 'You made a sale! 🎉',
+        paymentNotice:
+          'Payment has been successfully verified for this order.',
+        fulfillmentNotice:
+          'Please prepare and ship the artwork within 3–5 business days.',
+      };
+
+    case 'cod':
+      return {
+        subjectPrefix: 'New COD Order',
+        heading: 'New Cash-on-Delivery order',
+        paymentNotice:
+          'This order is Cash on Delivery. Payment is due when the artwork is delivered.',
+        fulfillmentNotice:
+          'Please prepare and ship the artwork within 3–5 business days.',
+      };
+
+    case 'upi':
+      return {
+        subjectPrefix: 'Order Received — Payment Pending',
+        heading: 'New order — payment pending',
+        paymentNotice:
+          'The buyer selected manual UPI. Payment has not yet been verified.',
+        fulfillmentNotice:
+          'Please wait for payment verification before preparing or shipping this order.',
+      };
+
+    case 'netbanking':
+      return {
+        subjectPrefix: 'Order Received — Payment Pending',
+        heading: 'New order — payment pending',
+        paymentNotice:
+          'The buyer selected bank transfer. Payment has not yet been verified.',
+        fulfillmentNotice:
+          'Please wait for payment verification before preparing or shipping this order.',
+      };
+  }
+}
+
 
 async function sendEmail({
   to,
   subject,
   html,
+  idempotencyKey,
 }: EmailOptions): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const fromEmail = process.env.RESEND_FROM_EMAIL?.trim();
 
-  // Email is optional. Registration and ordering must continue
-  // even when the project owner has not configured Resend.
   if (!apiKey) {
     console.info(
       '[Email skipped] RESEND_API_KEY is not configured.'
     );
+
     return false;
   }
 
@@ -78,27 +176,43 @@ async function sendEmail({
     console.info(
       '[Email skipped] RESEND_FROM_EMAIL is not configured.'
     );
+
     return false;
   }
 
-  if (!to.trim()) {
-    console.warn('[Email skipped] Recipient address is empty.');
+  const recipient = to.trim();
+
+  if (!recipient) {
+    console.warn(
+      '[Email skipped] Recipient address is empty.'
+    );
+
     return false;
   }
 
   try {
     const response = await fetch(RESEND_API_URL, {
       method: 'POST',
+
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+
+        ...(idempotencyKey
+          ? {
+              'Idempotency-Key': idempotencyKey,
+            }
+          : {}),
       },
+
       body: JSON.stringify({
         from: fromEmail,
-        to: to.trim(),
+        to: recipient,
         subject: safeSubject(subject),
         html,
       }),
+
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -109,7 +223,6 @@ async function sendEmail({
       try {
         errorDetails = JSON.parse(responseText);
       } catch {
-        // Keep the original response text if it is not JSON.
       }
 
       console.error('[Resend error]', {
@@ -124,16 +237,15 @@ async function sendEmail({
   } catch (error: unknown) {
     console.error(
       '[Email send failed]',
-      error instanceof Error ? error.message : 'Unknown error'
+      error instanceof Error
+        ? error.message
+        : 'Unknown error'
     );
 
     return false;
   }
 }
 
-// -----------------------------------------------------------------------------
-// Email templates
-// -----------------------------------------------------------------------------
 
 export async function sendWelcomeEmail(
   name: string,
@@ -144,9 +256,12 @@ export async function sendWelcomeEmail(
 
   return sendEmail({
     to: email,
+
     subject: 'Welcome to Unboxarts 🎨',
+
     html: `
       <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#1a1a1a">
+
         <h1 style="font-size:24px;font-weight:700;margin-bottom:8px">
           Welcome to <span style="color:#e63329">Unboxarts</span>, ${safeName}!
         </h1>
@@ -164,23 +279,37 @@ export async function sendWelcomeEmail(
 
         <p style="color:#9ca3af;font-size:12px">
           Unboxarts · India's Largest Art Portal<br/>
-          <a href="${appUrl}" style="color:#e63329">Visit Unboxarts</a>
+          <a href="${appUrl}" style="color:#e63329">
+            Visit Unboxarts
+          </a>
         </p>
+
       </div>
     `,
   });
 }
 
+
 export async function sendOrderConfirmationEmail(
   buyerEmail: string,
   buyerName: string,
   orderNumber: string,
-  items: Array<{ title: string; price: number; type: string }>,
-  total: number
+  items: Array<{
+    title: string;
+    price: number;
+    type: string;
+  }>,
+  total: number,
+  paymentMethod: OrderPaymentMethod = 'razorpay',
+  idempotencyKey?: string
 ): Promise<boolean> {
   const safeBuyerName = escapeHtml(buyerName);
   const safeOrderNumber = escapeHtml(orderNumber);
+
   const appUrl = getAppUrl();
+
+  const paymentDetails =
+    getBuyerPaymentDetails(paymentMethod);
 
   const itemsHtml = items
     .map(
@@ -189,6 +318,7 @@ export async function sendOrderConfirmationEmail(
           <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
             ${escapeHtml(item.title)}
           </td>
+
           <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px;text-align:right;white-space:nowrap">
             ${formatINR(item.price)}
           </td>
@@ -199,41 +329,68 @@ export async function sendOrderConfirmationEmail(
 
   return sendEmail({
     to: buyerEmail,
-    subject: `Order Confirmed — ${orderNumber}`,
+
+    subject: `${paymentDetails.subjectPrefix} — ${orderNumber}`,
+
+    idempotencyKey,
+
     html: `
       <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#1a1a1a">
+
         <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">
-          Order Confirmed ✓
+          ${paymentDetails.subjectPrefix}
         </h1>
 
-        <p style="color:#6b7280;font-size:13px;margin-bottom:24px">
-          Hi ${safeBuyerName}, your order has been placed successfully.
+        <p style="color:#6b7280;font-size:13px;margin-bottom:20px">
+          Hi ${safeBuyerName}, your order has been received.
         </p>
 
         <div style="background:#f9fafb;padding:16px;margin-bottom:24px">
+
           <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em">
             Order Number
           </p>
+
           <p style="margin:0;font-size:16px;font-weight:700;color:#e63329">
             ${safeOrderNumber}
           </p>
+
+        </div>
+
+        <div style="background:#f9fafb;padding:16px;margin-bottom:24px">
+
+          <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em">
+            Payment Information
+          </p>
+
+          <p style="margin:0 0 6px;font-size:13px;font-weight:600">
+            ${paymentDetails.paymentLabel}
+          </p>
+
+          <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6">
+            ${paymentDetails.paymentNotice}
+          </p>
+
         </div>
 
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+
           ${itemsHtml}
+
           <tr>
             <td style="padding:12px 0;font-size:14px;font-weight:700">
               Total
             </td>
+
             <td style="padding:12px 0;font-size:14px;font-weight:700;text-align:right">
               ${formatINR(total)}
             </td>
           </tr>
+
         </table>
 
         <p style="color:#6b7280;font-size:13px;line-height:1.6;margin-bottom:20px">
-          The artist will prepare your artwork and ship it within 3–5 business days.
-          You'll receive a tracking number by email once it's dispatched.
+          ${paymentDetails.fulfillmentNotice}
         </p>
 
         <a href="${appUrl}/orders"
@@ -246,10 +403,12 @@ export async function sendOrderConfirmationEmail(
         <p style="color:#9ca3af;font-size:12px">
           Unboxarts · 0% Commission Art Marketplace
         </p>
+
       </div>
     `,
   });
 }
+
 
 export async function sendNewOrderNotificationEmail(
   artistEmail: string,
@@ -257,38 +416,57 @@ export async function sendNewOrderNotificationEmail(
   orderNumber: string,
   artworkTitle: string,
   buyerName: string,
-  amount: number
+  amount: number,
+  paymentMethod: OrderPaymentMethod = 'razorpay',
+  idempotencyKey?: string
 ): Promise<boolean> {
   const safeArtistName = escapeHtml(artistName);
   const safeOrderNumber = escapeHtml(orderNumber);
   const safeArtworkTitle = escapeHtml(artworkTitle);
   const safeBuyerName = escapeHtml(buyerName);
+
   const appUrl = getAppUrl();
+
+  const paymentDetails =
+    getArtistPaymentDetails(paymentMethod);
 
   return sendEmail({
     to: artistEmail,
-    subject: `🎉 New Sale — ${artworkTitle}`,
+
+    subject: `${paymentDetails.subjectPrefix} — ${artworkTitle}`,
+
+    idempotencyKey,
+
     html: `
       <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#1a1a1a">
+
         <h1 style="font-size:22px;font-weight:700;margin-bottom:4px">
-          You made a sale! 🎉
+          ${paymentDetails.heading}
         </h1>
 
         <p style="color:#6b7280;font-size:13px;margin-bottom:24px">
-          Hi ${safeArtistName}, someone just purchased your artwork.
+          Hi ${safeArtistName}, you have received an order for your artwork.
         </p>
 
         <div style="background:#fde8e7;border-left:4px solid #e63329;padding:16px;margin-bottom:24px">
+
           <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em">
-            Artwork Sold
+            Artwork Ordered
           </p>
+
           <p style="margin:0;font-size:16px;font-weight:700">
             ${safeArtworkTitle}
           </p>
+
           <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#e63329">
             ${formatINR(amount)}
           </p>
+
         </div>
+
+        <p style="color:#6b7280;font-size:13px;line-height:1.6;margin-bottom:16px">
+          ${paymentDetails.paymentNotice}
+        </p>
 
         <p style="color:#6b7280;font-size:13px;margin-bottom:4px">
           <strong>Buyer:</strong> ${safeBuyerName}
@@ -299,7 +477,7 @@ export async function sendNewOrderNotificationEmail(
         </p>
 
         <p style="color:#6b7280;font-size:13px;line-height:1.6;margin-bottom:20px">
-          Please prepare and ship the artwork within 3–5 business days.
+          ${paymentDetails.fulfillmentNotice}
           Log in to your dashboard to view the shipping address and manage this order.
         </p>
 
@@ -313,6 +491,7 @@ export async function sendNewOrderNotificationEmail(
         <p style="color:#9ca3af;font-size:12px">
           Unboxarts · 0% Commission Art Marketplace
         </p>
+
       </div>
     `,
   });

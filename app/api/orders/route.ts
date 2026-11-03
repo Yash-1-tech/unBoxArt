@@ -10,11 +10,6 @@ import User from '@/models/User';
 import Artwork from '@/models/Artwork';
 
 import {
-  sendOrderConfirmationEmail,
-  sendNewOrderNotificationEmail,
-} from '@/lib/email';
-
-import {
   sessionOptions,
   type SessionData,
 } from '@/lib/session';
@@ -594,6 +589,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const artistNotificationStates: Array<{
+      artist: mongoose.Types.ObjectId;
+      status: 'pending';
+      attempts: number;
+    }> = [];
+
+    const notifiedArtistIds = new Set<string>();
+
+    for (const artwork of artworkDocs) {
+      const artist = artwork.artist as {
+        _id?: mongoose.Types.ObjectId | string;
+      } | null;
+
+      if (!artist?._id) {
+        continue;
+      }
+
+      const artistId = artist._id.toString();
+
+      if (notifiedArtistIds.has(artistId)) {
+        continue;
+      }
+
+      notifiedArtistIds.add(artistId);
+
+      artistNotificationStates.push({
+        artist: new mongoose.Types.ObjectId(artistId),
+        status: 'pending',
+        attempts: 0,
+      });
+    }
+
     const order = await Order.create({
       buyer: buyer._id,
       items: orderItems,
@@ -606,67 +633,14 @@ export async function POST(req: NextRequest) {
       paymentStatus: 'pending',
       inventoryAdjusted: reservedOriginals.length > 0,
       orderStatus: 'placed',
+      emailNotifications: {
+        buyerConfirmation: {
+          status: 'pending',
+          attempts: 0,
+        },
+        artistSales: artistNotificationStates,
+      },
     });
-
-    try {
-      const emailItems = orderItems.map((item) => {
-        const artwork = artworkMap.get(
-          item.artwork.toString()
-        );
-
-        return {
-          title: artwork?.title || 'Artwork',
-          price: item.price,
-          type: item.type,
-        };
-      });
-
-      sendOrderConfirmationEmail(
-        buyer.email,
-        buyer.name,
-        order.orderNumber,
-        emailItems,
-        total
-      ).catch((emailError) => {
-        console.error(
-          'Order confirmation email failed:',
-          emailError
-        );
-      });
-
-      const notifiedArtists = new Set<string>();
-
-      for (const artwork of artworkDocs) {
-        const artist = artwork.artist as {
-          _id: mongoose.Types.ObjectId;
-          name?: string;
-          email?: string;
-        } | null;
-
-        if (
-          artist?.email &&
-          !notifiedArtists.has(artist._id.toString())
-        ) {
-          notifiedArtists.add(artist._id.toString());
-
-          sendNewOrderNotificationEmail(
-            artist.email,
-            artist.name || 'Artist',
-            order.orderNumber,
-            artwork.title,
-            buyer.name,
-            total
-          ).catch((emailError) => {
-            console.error(
-              'Artist order notification email failed:',
-              emailError
-            );
-          });
-        }
-      }
-    } catch (emailError) {
-      console.error('Order email error:', emailError);
-    }
 
     return NextResponse.json(order, { status: 201 });
   } catch (err: unknown) {
