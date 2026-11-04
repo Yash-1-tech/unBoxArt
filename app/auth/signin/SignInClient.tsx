@@ -135,7 +135,7 @@ export default function SignInPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400">
-              Test: dinkar@unboxarts.com / password123
+              Example: dinkar@unboxarts.com / password123
             </span>
             <Link href="/auth/forgot-password" className="text-xs text-gray-500 hover:text-[#e63329]">
               Forgot?

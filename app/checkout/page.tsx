@@ -313,7 +313,7 @@ export default function CheckoutPage() {
                   </label>
                 )}
                 {[
-                  { value: 'upi', label: 'UPI (manual)', desc: 'Pay via UPI and share screenshot' },
+                  { value: 'upi', label: 'UPI (manual)', desc: "Place your order first. We'll share UPI payment details separately. Order confirmation follows payment verification." },
                   { value: 'netbanking', label: 'Net Banking / NEFT / RTGS', desc: 'Bank transfer — details shared after order' },
                   { value: 'cod', label: 'Cash on Delivery', desc: 'Available for orders below ₹50,000' },
                 ].map((method) => (
