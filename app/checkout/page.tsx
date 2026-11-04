@@ -313,9 +313,11 @@ export default function CheckoutPage() {
                   </label>
                 )}
                 {[
-                  { value: 'upi', label: 'UPI (manual)', desc: "Place your order first. We'll share UPI payment details separately. Order confirmation follows payment verification." },
-                  { value: 'netbanking', label: 'Net Banking / NEFT / RTGS', desc: 'Bank transfer — details shared after order' },
-                  { value: 'cod', label: 'Cash on Delivery', desc: 'Available for orders below ₹50,000' },
+                  {
+                    value: 'cod',
+                    label: 'Cash on Delivery',
+                    desc: 'Pay when your artwork is delivered. Available for orders below ₹50,000.',
+                  },
                 ].map((method) => (
                   <label key={method.value} className={`flex items-center gap-3 p-3 border cursor-pointer transition-colors ${paymentMethod === method.value ? 'border-[#e63329] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
                     <input type="radio" name="payment" value={method.value} checked={paymentMethod === method.value} onChange={() => setPaymentMethod(method.value)} className="accent-[#e63329]" />

@@ -16,8 +16,6 @@ import {
 
 const ALLOWED_PAYMENT_METHODS = [
   'razorpay',
-  'upi',
-  'netbanking',
   'cod',
 ] as const;
 
