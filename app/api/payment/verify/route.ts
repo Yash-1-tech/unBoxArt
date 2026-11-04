@@ -1,14 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
-
 import { connectDB } from '@/lib/db';
 import Order from '@/models/Order';
 import Artwork from '@/models/Artwork';
-
+import { dispatchOrderEmails } from '@/lib/order-email-notifications';
 import {
   sessionOptions,
   type SessionData,
@@ -491,6 +489,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (order.paymentStatus === 'paid') {
+        await dispatchOrderEmails(orderId);
         return NextResponse.json({
           verified: true,
           alreadyVerified: true,
@@ -665,6 +664,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (alreadyVerified) {
+      await dispatchOrderEmails(orderId);
       return NextResponse.json({
         verified: true,
         alreadyVerified: true,
@@ -682,10 +682,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await dispatchOrderEmails(orderId);
     return NextResponse.json({
       verified: true,
       paymentId: razorpay_payment_id,
     });
+
   } catch (err: unknown) {
     console.error(
       '[POST /api/payment/verify]',

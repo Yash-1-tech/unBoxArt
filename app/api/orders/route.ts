@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getIronSession } from 'iron-session';
 import mongoose from 'mongoose';
-
 import { connectDB } from '@/lib/db';
 import Order from '@/models/Order';
 import Cart from '@/models/Cart';
 import User from '@/models/User';
 import Artwork from '@/models/Artwork';
+import { dispatchOrderEmails } from '@/lib/order-email-notifications';
 
 import {
   sessionOptions,
@@ -640,7 +640,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (order.paymentMethod === 'cod') {
+      await dispatchOrderEmails(order._id.toString());
+    }
     return NextResponse.json(order, { status: 201 });
+
   } catch (err: unknown) {
     console.error('[POST /api/orders]', err);
 
