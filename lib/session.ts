@@ -4,7 +4,7 @@ export interface SessionUser {
   id: string;
   name: string;
   email: string;
-  role: 'artist' | 'buyer';
+  role: 'artist' | 'buyer' | 'admin';
   membershipTier: 'free' | 'silver' | 'gold' | 'platinum';
   profileImage?: string;
 }
@@ -13,8 +13,6 @@ export interface SessionData {
   user?: SessionUser;
 }
 
-// Prefer a dedicated session secret.
-// NEXTAUTH_SECRET remains a compatibility fallback.
 const sessionPassword =
   process.env.IRON_SESSION_PASSWORD ||
   process.env.NEXTAUTH_SECRET;

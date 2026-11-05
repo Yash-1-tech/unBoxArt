@@ -14,7 +14,7 @@ export interface SessionUser {
   id: string;
   name: string;
   email: string;
-  role: 'artist' | 'buyer';
+  role: 'artist' | 'buyer' | 'admin';
   membershipTier: 'free' | 'silver' | 'gold' | 'platinum';
   profileImage?: string;
 }
@@ -68,7 +68,6 @@ export function AuthProvider({
     setLoading(true);
 
     try {
-      // Clear both authentication sessions.
       const [ironResult, nextAuthResult] =
         await Promise.allSettled([
           fetch('/api/auth/logout', {
@@ -98,7 +97,6 @@ export function AuthProvider({
     } catch (error) {
       console.error('Logout failed:', error);
 
-      // Restore the actual authentication state if logout fails.
       await fetchUser();
     } finally {
       setLoading(false);
