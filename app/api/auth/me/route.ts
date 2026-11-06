@@ -62,7 +62,8 @@ export async function GET() {
 
     if (
       user.role !== 'buyer' &&
-      user.role !== 'artist'
+      user.role !== 'artist' &&
+      user.role !== 'admin'
     ) {
       session.destroy();
       return jsonResponse(null, 401);

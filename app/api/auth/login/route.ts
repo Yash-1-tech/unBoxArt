@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
@@ -25,7 +24,6 @@ function jsonError(error: string, status: number) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Parse request safely.
     let body: unknown;
 
     try {
@@ -72,14 +70,10 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
-    // Password is explicitly selected because the User model
-    // excludes it from normal queries.
     const user = await User.findOne({
       email: normalizedEmail,
     }).select('+password');
 
-    // Use the same response for nonexistent accounts,
-    // incorrect passwords, and Google-only accounts.
     if (!user || !user.password) {
       return jsonError('Invalid email or password', 401);
     }
@@ -93,15 +87,17 @@ export async function POST(req: NextRequest) {
       return jsonError('Invalid email or password', 401);
     }
 
-    // Confirm the database still contains a valid account role.
-    if (user.role !== 'buyer' && user.role !== 'artist') {
+    if (
+      user.role !== 'buyer' &&
+      user.role !== 'artist' &&
+      user.role !== 'admin'
+    ) {
       return jsonError(
         'This account is not authorized to sign in',
         403
       );
     }
 
-    // Establish the authenticated session.
     const cookieStore = await cookies();
 
     const session = await getIronSession<SessionData>(
@@ -120,8 +116,6 @@ export async function POST(req: NextRequest) {
 
     await session.save();
 
-    // Return only the fields the frontend needs.
-    // Never return the password hash or internal user data.
     const safeUser = {
       _id: user._id.toString(),
       name: user.name,
