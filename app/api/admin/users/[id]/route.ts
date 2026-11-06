@@ -38,7 +38,6 @@ export async function PATCH(
       return jsonError('Invalid user ID', 400);
     }
 
-    // Prevent an admin from changing their own account.
     if (id.toLowerCase() === admin.id.toLowerCase()) {
       return jsonError(
         'You cannot modify your own admin account',
@@ -103,7 +102,6 @@ export async function PATCH(
       updates.isVerified = payload.isVerified;
     }
 
-    // Admin accounts cannot be modified through this endpoint.
     const updatedUser = await User.findOneAndUpdate(
       {
         _id: id,
