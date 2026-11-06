@@ -1,6 +1,4 @@
-
 'use client';
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -80,7 +78,6 @@ function ArtworkImage({ artwork }: { artwork: AdminArtwork }) {
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={imageUrl}
       alt={artwork.title}
@@ -105,7 +102,6 @@ export default function AdminArtworks() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Debounce the search field.
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearch(searchInput.trim());
@@ -115,7 +111,6 @@ export default function AdminArtworks() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  // Fetch artworks whenever the filters or page change.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -234,7 +229,6 @@ export default function AdminArtworks() {
           </div>
         </div>
 
-        {/* Filters */}
         <div className="mb-6 border border-gray-200 bg-white p-4">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(240px,1fr)_190px_210px]">
             <div className="relative">
@@ -287,7 +281,6 @@ export default function AdminArtworks() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div
             role="alert"
@@ -308,7 +301,6 @@ export default function AdminArtworks() {
           </div>
         )}
 
-        {/* Artwork grid */}
         {loading && artworks.length === 0 ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -429,7 +421,6 @@ export default function AdminArtworks() {
           </div>
         )}
 
-        {/* Pagination */}
         <div className="mt-5 flex flex-col gap-3 border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-gray-500">
             {total === 0
