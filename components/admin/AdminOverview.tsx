@@ -1,5 +1,5 @@
 'use client';
-
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
@@ -191,18 +191,28 @@ export default function AdminOverview({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void loadOverview()}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              size={15}
-              className={loading ? 'animate-spin' : ''}
-            />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/artworks"
+              className="inline-flex items-center justify-center gap-2 bg-[#e63329] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#c92b22]"
+            >
+              <ImageIcon size={16} />
+              Manage Artworks
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => void loadOverview()}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                size={15}
+                className={loading ? 'animate-spin' : ''}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Error */}
