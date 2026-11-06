@@ -1,3 +1,4 @@
+
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 
@@ -27,10 +28,6 @@ export async function getAdminUser(): Promise<AdminIdentity | null> {
     typeof userId !== 'string' ||
     !/^[a-fA-F0-9]{24}$/.test(userId)
   ) {
-    if (session.user) {
-      session.destroy();
-    }
-
     return null;
   }
 
@@ -41,7 +38,6 @@ export async function getAdminUser(): Promise<AdminIdentity | null> {
     .lean();
 
   if (!user || user.role !== 'admin') {
-    session.destroy();
     return null;
   }
 

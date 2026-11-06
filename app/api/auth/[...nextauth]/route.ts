@@ -29,7 +29,6 @@ const handler = NextAuth({
 
   callbacks: {
     async signIn({ user, account, profile }) {
-      // This application currently supports Google OAuth only.
       if (account?.provider !== 'google') {
         return false;
       }
@@ -41,7 +40,6 @@ const handler = NextAuth({
           }
         | undefined;
 
-      // Require Google's verified email claim.
       if (googleProfile?.email_verified !== true) {
         console.error('[Google OAuth] Email verification failed');
         return false;
@@ -86,7 +84,6 @@ const handler = NextAuth({
               : undefined;
 
           try {
-            // New Google accounts always start as buyers.
             dbUser = await User.create({
               name,
               email,
@@ -96,7 +93,6 @@ const handler = NextAuth({
               isVerified: true,
             });
           } catch (createError) {
-            // Handle simultaneous first-time sign-ins.
             if (!isDuplicateKeyError(createError)) {
               throw createError;
             }
@@ -109,16 +105,15 @@ const handler = NextAuth({
           }
         }
 
-        // Reject unexpected database roles.
         if (
           dbUser.role !== 'buyer' &&
-          dbUser.role !== 'artist'
+          dbUser.role !== 'artist' &&
+          dbUser.role !== 'admin'
         ) {
           console.error('[Google OAuth] Invalid database role');
           return false;
         }
 
-        // Preserve the existing database role and membership.
         const cookieStore = await cookies();
 
         const session = await getIronSession<SessionData>(
@@ -139,7 +134,6 @@ const handler = NextAuth({
 
         return true;
       } catch (err) {
-        // Avoid logging OAuth tokens or personal account details.
         console.error(
           '[Google OAuth] Sign-in failed:',
           err instanceof Error ? err.name : 'Unknown error'
