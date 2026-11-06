@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface ArtworkArtist {
@@ -43,6 +44,12 @@ interface ArtworksResponse {
   limit: number;
   totalPages: number;
 }
+
+type ModerationField =
+  | 'isAvailable'
+  | 'isFeatured'
+  | 'isCuratorsPick'
+  | 'isTrending';
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -101,6 +108,13 @@ export default function AdminArtworks() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+
+  const [updatingArtworkId, setUpdatingArtworkId] = useState<
+    string | null
+  >(null);
+
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -177,6 +191,93 @@ export default function AdminArtworks() {
     return () => controller.abort();
   }, [page, status, collection, search, reloadKey]);
 
+  async function updateArtwork(
+    artwork: AdminArtwork,
+    field: ModerationField
+  ) {
+    if (updatingArtworkId !== null) {
+      return;
+    }
+
+    const nextValue = !artwork[field];
+
+    setUpdatingArtworkId(artwork._id);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const response = await fetch(
+        `/api/admin/artworks/${encodeURIComponent(artwork._id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            [field]: nextValue,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || 'Failed to update artwork.'
+        );
+      }
+
+      setActionSuccess(
+        `"${artwork.title}" was updated successfully.`
+      );
+
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update artwork.'
+      );
+    } finally {
+      setUpdatingArtworkId(null);
+    }
+  }
+
+  function moderationButton(
+    artwork: AdminArtwork,
+    field: ModerationField,
+    label: string,
+    activeLabel: string,
+    inactiveLabel: string
+  ) {
+    const active = artwork[field];
+    const busy = updatingArtworkId !== null;
+
+    return (
+      <button
+        type="button"
+        onClick={() => void updateArtwork(artwork, field)}
+        disabled={busy}
+        aria-pressed={active}
+        className={`flex w-full items-center justify-between gap-2 border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          active
+            ? 'border-green-200 bg-green-50 text-green-800 hover:border-green-400'
+            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+        }`}
+      >
+        <span>{label}</span>
+
+        <span>
+          {updatingArtworkId === artwork._id
+            ? 'Saving...'
+            : active
+              ? activeLabel
+              : inactiveLabel}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
@@ -202,7 +303,7 @@ export default function AdminArtworks() {
               </h1>
 
               <p className="mt-2 text-sm text-gray-500">
-                Review all marketplace listings, including unavailable artworks.
+                Review and moderate all marketplace listings, including unavailable artworks.
               </p>
             </div>
 
@@ -214,7 +315,9 @@ export default function AdminArtworks() {
 
               <button
                 type="button"
-                onClick={() => setReloadKey((current) => current + 1)}
+                onClick={() =>
+                  setReloadKey((current) => current + 1)
+                }
                 disabled={loading}
                 aria-label="Refresh artworks"
                 className="inline-flex items-center gap-2 border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-gray-500 disabled:opacity-50"
@@ -281,6 +384,26 @@ export default function AdminArtworks() {
           </div>
         </div>
 
+        {actionError && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+            <p>{actionError}</p>
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-2 border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+          >
+            <CheckCircle2 size={17} />
+            {actionSuccess}
+          </div>
+        )}
+
         {error && (
           <div
             role="alert"
@@ -292,7 +415,9 @@ export default function AdminArtworks() {
 
             <button
               type="button"
-              onClick={() => setReloadKey((current) => current + 1)}
+              onClick={() =>
+                setReloadKey((current) => current + 1)
+              }
               className="inline-flex items-center gap-1 font-semibold underline"
             >
               <RefreshCw size={13} />
@@ -415,6 +540,44 @@ export default function AdminArtworks() {
                       </span>
                     </div>
                   </div>
+
+                  <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">
+                      Moderation
+                    </p>
+
+                    {moderationButton(
+                      artwork,
+                      'isAvailable',
+                      'Marketplace listing',
+                      'Available',
+                      'Unavailable'
+                    )}
+
+                    {moderationButton(
+                      artwork,
+                      'isFeatured',
+                      'Featured collection',
+                      'Enabled',
+                      'Disabled'
+                    )}
+
+                    {moderationButton(
+                      artwork,
+                      'isCuratorsPick',
+                      "Curator's picks",
+                      'Enabled',
+                      'Disabled'
+                    )}
+
+                    {moderationButton(
+                      artwork,
+                      'isTrending',
+                      'Trending collection',
+                      'Enabled',
+                      'Disabled'
+                    )}
+                  </div>
                 </div>
               </article>
             ))}
@@ -463,6 +626,10 @@ export default function AdminArtworks() {
             </button>
           </div>
         </div>
+
+        <p className="mt-4 text-xs text-gray-400">
+          Making an artwork unavailable hides it from new purchases. It does not delete the artwork or its historical order records.
+        </p>
       </div>
     </div>
   );
