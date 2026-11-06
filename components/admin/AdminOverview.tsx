@@ -201,6 +201,14 @@ export default function AdminOverview({
             </Link>
 
             <Link
+              href="/admin/users"
+              className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
+            >
+              <Users size={16} />
+              Manage Users
+            </Link>
+
+            <Link
               href="/admin/orders"
               className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
             >
