@@ -200,6 +200,14 @@ export default function AdminOverview({
               Manage Artworks
             </Link>
 
+            <Link
+              href="/admin/orders"
+              className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
+            >
+              <ShoppingBag size={16} />
+              Manage Orders
+            </Link>
+
             <button
               type="button"
               onClick={() => void loadOverview()}
