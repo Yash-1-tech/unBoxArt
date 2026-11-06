@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -31,6 +30,11 @@ interface UsersResponse {
   limit: number;
   totalPages: number;
 }
+
+type UserUpdates = {
+  role?: 'buyer' | 'artist';
+  isVerified?: boolean;
+};
 
 const ROLE_STYLES: Record<string, string> = {
   buyer: 'bg-blue-50 text-blue-700',
@@ -77,7 +81,16 @@ export default function AdminUsers() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Avoid a request for every keystroke.
+  const [roleDrafts, setRoleDrafts] = useState<
+    Record<string, 'buyer' | 'artist'>
+  >({});
+
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(
+    null
+  );
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearch(searchInput.trim());
@@ -87,7 +100,6 @@ export default function AdminUsers() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  // Load the current page whenever a filter changes.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -152,7 +164,60 @@ export default function AdminUsers() {
     void loadUsers();
 
     return () => controller.abort();
-  }, [page, role, verification, search,reloadKey]);
+  }, [page, role, verification, search, reloadKey]);
+
+  async function updateUser(
+    user: AdminUser,
+    updates: UserUpdates
+  ) {
+    if (user.role === 'admin') {
+      return;
+    }
+
+    setUpdatingUserId(user._id);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const response = await fetch(
+        `/api/admin/users/${encodeURIComponent(user._id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updates),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || 'Failed to update this account.'
+        );
+      }
+
+      setRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[user._id];
+        return next;
+      });
+
+      setActionSuccess(`${user.name}'s account was updated.`);
+
+      // Reload so active filters and account totals stay accurate.
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update this account.'
+      );
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
 
   const changeRole = (value: string) => {
     setRole(value);
@@ -163,6 +228,76 @@ export default function AdminUsers() {
     setVerification(value);
     setPage(1);
   };
+
+  function renderAccountActions(user: AdminUser) {
+    if (user.role === 'admin') {
+      return (
+        <p className="text-xs text-gray-400">
+          Admin account — protected
+        </p>
+      );
+    }
+
+    const selectedRole =
+      roleDrafts[user._id] ??
+      (user.role === 'artist' ? 'artist' : 'buyer');
+
+    const isUpdating = updatingUserId !== null;
+
+    return (
+      <div className="flex min-w-[190px] flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedRole}
+            onChange={(event) =>
+              setRoleDrafts((current) => ({
+                ...current,
+                [user._id]: event.target.value as 'buyer' | 'artist',
+              }))
+            }
+            disabled={isUpdating}
+            aria-label={`Change role for ${user.name}`}
+            className="min-w-0 flex-1 border border-gray-200 bg-white px-2 py-2 text-xs outline-none focus:border-[#e63329] disabled:opacity-50"
+          >
+            <option value="buyer">Buyer</option>
+            <option value="artist">Artist</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() =>
+              void updateUser(user, { role: selectedRole })
+            }
+            disabled={isUpdating || selectedRole === user.role}
+            className="border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {updatingUserId === user._id ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            void updateUser(user, {
+              isVerified: !user.isVerified,
+            })
+          }
+          disabled={isUpdating}
+          className={`self-start text-xs font-medium underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${
+            user.isVerified
+              ? 'text-amber-700 hover:text-amber-900'
+              : 'text-green-700 hover:text-green-900'
+          }`}
+        >
+          {updatingUserId === user._id
+            ? 'Updating...'
+            : user.isVerified
+              ? 'Remove verification'
+              : 'Mark verified'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -189,7 +324,7 @@ export default function AdminUsers() {
               </h1>
 
               <p className="mt-2 text-sm text-gray-500">
-                Search and review buyer, artist, and admin accounts.
+                Search, review, and manage buyer and artist accounts.
               </p>
             </div>
 
@@ -249,7 +384,27 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        {/* Error */}
+        {/* Update feedback */}
+        {actionError && (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-3 border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+            <p>{actionError}</p>
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div
+            role="status"
+            className="mb-5 border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+          >
+            {actionSuccess}
+          </div>
+        )}
+
+        {/* Fetch error */}
         {error && (
           <div
             role="alert"
@@ -272,7 +427,7 @@ export default function AdminUsers() {
         {/* Desktop table */}
         <div className="hidden overflow-hidden border border-gray-200 bg-white md:block">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left">
+            <table className="w-full min-w-[1050px] text-left">
               <thead className="border-b border-gray-200 bg-gray-50">
                 <tr>
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -293,6 +448,9 @@ export default function AdminUsers() {
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
                     Joined
                   </th>
+                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -300,7 +458,7 @@ export default function AdminUsers() {
                 {loading && users.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-5 py-14 text-center text-sm text-gray-400"
                     >
                       Loading accounts...
@@ -309,7 +467,7 @@ export default function AdminUsers() {
                 ) : users.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-5 py-14 text-center text-sm text-gray-500"
                     >
                       No accounts match these filters.
@@ -380,6 +538,10 @@ export default function AdminUsers() {
 
                       <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-600">
                         {formatDate(user.createdAt)}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {renderAccountActions(user)}
                       </td>
                     </tr>
                   ))
@@ -476,6 +638,13 @@ export default function AdminUsers() {
                     </p>
                   </div>
                 </div>
+
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Account actions
+                  </p>
+                  {renderAccountActions(user)}
+                </div>
               </article>
             ))
           )}
@@ -495,7 +664,9 @@ export default function AdminUsers() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              onClick={() =>
+                setPage((current) => Math.max(1, current - 1))
+              }
               disabled={page <= 1 || loading}
               className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
