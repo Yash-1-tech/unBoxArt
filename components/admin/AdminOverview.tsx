@@ -215,7 +215,6 @@ export default function AdminOverview({
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div
             role="alert"
@@ -236,7 +235,6 @@ export default function AdminOverview({
           </div>
         )}
 
-        {/* Loading */}
         {loading && !stats && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
@@ -248,7 +246,6 @@ export default function AdminOverview({
           </div>
         )}
 
-        {/* Metrics */}
         {stats && (
           <>
             <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -263,7 +260,6 @@ export default function AdminOverview({
               ))}
             </div>
 
-            {/* Operational snapshot */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <section className="border border-gray-200 bg-white p-5 sm:p-6">
                 <div className="mb-5 flex items-center gap-2">
@@ -370,7 +366,6 @@ export default function AdminOverview({
           </>
         )}
 
-        {/* Footer note */}
         <div className="mt-8 flex flex-col gap-2 border-t border-gray-200 pt-4 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
           <span>Unboxarts administration</span>
 
