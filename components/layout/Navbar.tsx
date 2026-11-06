@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Search, User, ShoppingCart, Menu, X, ChevronDown,
   Heart, LogOut, Settings, Package, LayoutDashboard, Upload,
-  Loader2,Edit2
+  Loader2, Edit2, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useCart } from '@/lib/CartContext';
@@ -235,6 +235,16 @@ export default function Navbar() {
                         <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors" onClick={() => setUserMenuOpen(false)}>
                           <LayoutDashboard size={15} /> Dashboard
                         </Link>
+                        {user.role === 'admin' && (
+                          <Link
+                            href="/admin"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-[#e63329] hover:bg-red-50 transition-colors"
+                            onClick={() => setUserMenuOpen(false)}
+                          >
+                            <ShieldCheck size={15} />
+                            Admin Panel
+                          </Link>
+                        )}
                         <Link href="/profile" className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors" onClick={() => setUserMenuOpen(false)}>
                           <Edit2 size={15} /> Edit Profile
                         </Link>
@@ -321,6 +331,15 @@ export default function Navbar() {
                   <Link href="/dashboard" className="mt-2 px-2 py-2 text-sm font-medium text-gray-700 border-t border-gray-100 hover:text-[#e63329]" onClick={() => setMobileOpen(false)}>
                     Dashboard ({user.name})
                   </Link>
+                  {user.role === 'admin' && (
+                    <Link
+                      href="/admin"
+                      className="px-2 py-2 text-sm font-semibold text-[#e63329]"
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      Admin Panel
+                    </Link>
+                  )}
                   <button onClick={() => { setMobileOpen(false); logout(); }} className="mt-1 text-left px-2 py-2 text-sm text-red-500">
                     Sign Out
                   </button>
