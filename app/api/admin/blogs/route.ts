@@ -1,6 +1,4 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-
 import { getAdminUser } from '@/lib/adminAuth';
 import Blog from '@/models/Blog';
 

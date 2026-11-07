@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Activity,
+  FileText,
   Image as ImageIcon,
   RefreshCw,
   ShieldCheck,
@@ -200,6 +201,14 @@ export default function AdminOverview({
               Manage Artworks
             </Link>
 
+            <Link
+              href="/admin/blogs"
+              className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
+            >
+              <FileText size={16} />
+              Manage Blogs
+            </Link>
+            
             <Link
               href="/admin/users"
               className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
