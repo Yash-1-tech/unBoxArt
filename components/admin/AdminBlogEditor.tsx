@@ -1,5 +1,7 @@
+
 'use client';
-import { useState } from 'react';
+
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,6 +11,23 @@ import {
   Send,
   AlertCircle,
 } from 'lucide-react';
+
+interface BlogData {
+  _id: string;
+  title: string;
+  slug: string;
+  coverImage: string;
+  excerpt?: string;
+  content: string;
+  tags?: string[];
+  isPublished: boolean;
+}
+
+interface AdminBlogEditorProps {
+  postId?: string;
+}
+
+type SaveIntent = 'save' | 'draft' | 'publish';
 
 function generateSlug(value: string): string {
   return value
@@ -23,8 +42,12 @@ function generateSlug(value: string): string {
     .replace(/-+$/, '');
 }
 
-export default function AdminBlogEditor() {
+export default function AdminBlogEditor({
+  postId,
+}: AdminBlogEditorProps) {
   const router = useRouter();
+
+  const isEditing = Boolean(postId);
 
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
@@ -33,11 +56,86 @@ export default function AdminBlogEditor() {
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [tagsInput, setTagsInput] = useState('');
+  const [isPublished, setIsPublished] = useState(false);
 
+  const [loadingPost, setLoadingPost] = useState(isEditing);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  async function savePost(publish: boolean) {
+  // Load an existing article when the editor is in edit mode.
+  useEffect(() => {
+    if (!postId) {
+      setLoadingPost(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadPost() {
+      setLoadingPost(true);
+      setLoadFailed(false);
+      setError('');
+
+      try {
+        const response = await fetch(
+          `/api/admin/blogs/${encodeURIComponent(postId!)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Failed to load this blog post.'
+          );
+        }
+
+        const blog = data.blog as BlogData;
+
+        if (!blog || !blog._id) {
+          throw new Error('The blog post response was invalid.');
+        }
+
+        setTitle(blog.title || '');
+        setSlug(blog.slug || '');
+        setSlugEdited(true);
+        setCoverImage(blog.coverImage || '');
+        setExcerpt(blog.excerpt || '');
+        setContent(blog.content || '');
+        setTagsInput((blog.tags || []).join(', '));
+        setIsPublished(Boolean(blog.isPublished));
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.name === 'AbortError'
+        ) {
+          return;
+        }
+
+        setLoadFailed(true);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load this blog post.'
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingPost(false);
+        }
+      }
+    }
+
+    void loadPost();
+
+    return () => controller.abort();
+  }, [postId]);
+
+  async function savePost(intent: SaveIntent) {
     setSaving(true);
     setError('');
 
@@ -46,22 +144,34 @@ export default function AdminBlogEditor() {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
+    const publish =
+      intent === 'publish'
+        ? true
+        : intent === 'draft'
+          ? false
+          : isPublished;
+
     try {
-      const response = await fetch('/api/blogs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          slug: slug.trim(),
-          coverImage: coverImage.trim(),
-          excerpt: excerpt.trim(),
-          content: content.trim(),
-          tags,
-          isPublished: publish,
-        }),
-      });
+      const response = await fetch(
+        isEditing
+          ? `/api/admin/blogs/${encodeURIComponent(postId!)}`
+          : '/api/blogs',
+        {
+          method: isEditing ? 'PATCH' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            slug: slug.trim(),
+            coverImage: coverImage.trim(),
+            excerpt: excerpt.trim(),
+            content: content.trim(),
+            tags,
+            isPublished: publish,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -84,15 +194,19 @@ export default function AdminBlogEditor() {
     }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const submitter = (
       event.nativeEvent as SubmitEvent
     ).submitter as HTMLButtonElement | null;
 
-    void savePost(submitter?.value === 'publish');
+    const intent = (submitter?.value || 'save') as SaveIntent;
+
+    void savePost(intent);
   }
+
+  const disableActions = saving || loadingPost || loadFailed;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -112,13 +226,34 @@ export default function AdminBlogEditor() {
           </div>
 
           <h1 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-            Create blog post
+            {isEditing ? 'Edit blog post' : 'Create blog post'}
           </h1>
 
           <p className="mt-2 text-sm text-gray-500">
-            Write an article for the Unboxarts community.
+            {isEditing
+              ? 'Update your article and publication status.'
+              : 'Write an article for the Unboxarts community.'}
           </p>
+
+          {isEditing && !loadingPost && !loadFailed && (
+            <p className="mt-2 text-xs text-gray-500">
+              Current status:{' '}
+              <span
+                className={`font-semibold ${
+                  isPublished ? 'text-green-700' : 'text-amber-700'
+                }`}
+              >
+                {isPublished ? 'Published' : 'Draft'}
+              </span>
+            </p>
+          )}
         </div>
+
+        {loadingPost && (
+          <div className="mb-6 border border-gray-200 bg-white p-5 text-sm text-gray-500">
+            Loading article...
+          </div>
+        )}
 
         {error && (
           <div
@@ -130,10 +265,7 @@ export default function AdminBlogEditor() {
           </div>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
+        <form onSubmit={handleSubmit} className="space-y-6">
           <section className="space-y-5 border border-gray-200 bg-white p-5 sm:p-6">
             <h2 className="text-sm font-semibold text-gray-900">
               Article details
@@ -162,7 +294,8 @@ export default function AdminBlogEditor() {
                   }
                 }}
                 placeholder="Enter your article title"
-                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
             </div>
 
@@ -186,7 +319,8 @@ export default function AdminBlogEditor() {
                   setSlugEdited(true);
                 }}
                 placeholder="your-article-url"
-                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
 
               <p className="mt-2 text-xs text-gray-400">
@@ -212,7 +346,8 @@ export default function AdminBlogEditor() {
                   setCoverImage(event.target.value)
                 }
                 placeholder="https://..."
-                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
 
               <p className="mt-2 text-xs text-gray-400">
@@ -221,7 +356,9 @@ export default function AdminBlogEditor() {
 
               {coverImage.startsWith('https://') && (
                 <div className="mt-3 aspect-[16/9] max-h-64 overflow-hidden bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    key={coverImage}
                     src={coverImage}
                     alt="Cover preview"
                     className="h-full w-full object-cover"
@@ -250,7 +387,8 @@ export default function AdminBlogEditor() {
                   setExcerpt(event.target.value)
                 }
                 placeholder="A short introduction to your article..."
-                className="w-full resize-y border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full resize-y border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
 
               <p className="mt-1 text-right text-[11px] text-gray-400">
@@ -274,7 +412,8 @@ export default function AdminBlogEditor() {
                   setTagsInput(event.target.value)
                 }
                 placeholder="Art, Painting, Artists, Inspiration"
-                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full border border-gray-200 px-3 py-3 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
 
               <p className="mt-1 text-xs text-gray-400">
@@ -313,7 +452,8 @@ export default function AdminBlogEditor() {
                   setContent(event.target.value)
                 }
                 placeholder="Start writing your article..."
-                className="w-full resize-y border border-gray-200 px-3 py-3 text-sm leading-7 outline-none focus:border-[#e63329]"
+                disabled={loadingPost || loadFailed}
+                className="w-full resize-y border border-gray-200 px-3 py-3 text-sm leading-7 outline-none focus:border-[#e63329] disabled:bg-gray-50"
               />
 
               <p className="mt-1 text-right text-[11px] text-gray-400">
@@ -322,7 +462,7 @@ export default function AdminBlogEditor() {
             </div>
           </section>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
             <Link
               href="/admin/blogs"
               className="inline-flex items-center justify-center border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:border-gray-500"
@@ -330,11 +470,24 @@ export default function AdminBlogEditor() {
               Cancel
             </Link>
 
+            {isEditing && (
+              <button
+                type="submit"
+                name="intent"
+                value="save"
+                disabled={disableActions}
+                className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save size={15} />
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            )}
+
             <button
               type="submit"
               name="intent"
               value="draft"
-              disabled={saving}
+              disabled={disableActions}
               className="inline-flex items-center justify-center gap-2 border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={15} />
@@ -345,7 +498,7 @@ export default function AdminBlogEditor() {
               type="submit"
               name="intent"
               value="publish"
-              disabled={saving}
+              disabled={disableActions}
               className="inline-flex items-center justify-center gap-2 bg-[#e63329] px-5 py-3 text-sm font-semibold text-white hover:bg-[#c92b22] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send size={15} />
