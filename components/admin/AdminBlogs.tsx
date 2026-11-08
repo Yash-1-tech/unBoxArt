@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ExternalLink,
   FileText,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -397,7 +398,15 @@ export default function AdminBlogs() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex shrink-0 items-center sm:flex-col sm:items-end sm:justify-between">
+                  <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end sm:justify-center">
+                    <Link
+                      href={`/admin/blogs/${encodeURIComponent(blog._id)}/edit`}
+                      className="inline-flex items-center gap-1.5 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:border-[#e63329] hover:text-[#e63329]"
+                    >
+                      <Pencil size={13} />
+                      Edit
+                    </Link>
+
                     {blog.isPublished && (
                       <Link
                         href={`/blog/${encodeURIComponent(blog.slug)}`}
