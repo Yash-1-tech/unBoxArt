@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
 } from 'lucide-react';
 
 interface BlogAuthor {
@@ -95,6 +96,61 @@ export default function AdminBlogs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+
+  const [deletingBlogId, setDeletingBlogId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+
+  async function deleteBlog(blog: AdminBlog) {
+    const confirmed = window.confirm(
+      `Permanently delete "${blog.title}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingBlogId(blog._id);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const response = await fetch(
+        `/api/admin/blogs/${encodeURIComponent(blog._id)}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || 'Failed to delete the blog post.'
+        );
+      }
+
+      setActionSuccess(`"${blog.title}" was deleted.`);
+
+      setBlogs((current) =>
+        current.filter((item) => item._id !== blog._id)
+      );
+
+      setTotal((current) => Math.max(0, current - 1));
+
+      if (blogs.length === 1 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+      } else {
+        setReloadKey((current) => current + 1);
+      }
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to delete the blog post.'
+      );
+    } finally {
+      setDeletingBlogId(null);
+    }
+  }
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -295,6 +351,24 @@ export default function AdminBlogs() {
           </div>
         )}
 
+        {actionError && (
+          <div
+            role="alert"
+            className="mb-5 border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {actionError}
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div
+            role="status"
+            className="mb-5 border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+          >
+            {actionSuccess}
+          </div>
+        )}
+
         {loading && blogs.length === 0 && !error ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -418,6 +492,15 @@ export default function AdminBlogs() {
                         View post
                       </Link>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => void deleteBlog(blog)}
+                      disabled={deletingBlogId !== null}
+                      className="inline-flex items-center gap-1.5 border border-red-200 px-3 py-2 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Trash2 size={13} />
+                      {deletingBlogId === blog._id ? 'Deleting...' : 'Delete'}
+                    </button>
                   </div>
                 </div>
               </article>

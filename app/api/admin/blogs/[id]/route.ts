@@ -338,3 +338,45 @@ export async function PATCH(
     return jsonError('Failed to update blog post', 500);
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: RouteContext
+) {
+  try {
+    const admin = await getAdminUser();
+
+    if (!admin) {
+      return jsonError('Admin access required', 403);
+    }
+
+    const { id } = await params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return jsonError('Invalid blog post ID', 400);
+    }
+
+    const deletedBlog = await Blog.findByIdAndDelete(id)
+      .select('_id title slug')
+      .lean();
+
+    if (!deletedBlog) {
+      return jsonError('Blog post not found', 404);
+    }
+
+    return NextResponse.json(
+      {
+        message: 'Blog post deleted successfully',
+        blog: deletedBlog,
+      },
+      {
+        status: 200,
+        headers: noStoreHeaders,
+      }
+    );
+  } catch (error) {
+    console.error('[DELETE /api/admin/blogs/:id]', error);
+
+    return jsonError('Failed to delete blog post', 500);
+  }
+}
