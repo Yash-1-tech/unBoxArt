@@ -184,6 +184,33 @@ function PaymentStatus({ status }: { status: string }) {
   );
 }
 
+function getNextAdminStatus(
+  order: AdminOrder
+): 'confirmed' | 'shipped' | 'delivered' | null {
+  const paymentBlocked =
+    (order.paymentMethod !== 'cod' &&
+      order.paymentStatus !== 'paid') ||
+    order.paymentStatus === 'failed' ||
+    order.paymentStatus === 'refunded' ||
+    order.refundStatus === 'pending' ||
+    order.refundStatus === 'processed';
+
+  if (paymentBlocked) {
+    return null;
+  }
+
+  switch (order.orderStatus) {
+    case 'placed':
+      return 'confirmed';
+    case 'confirmed':
+      return 'shipped';
+    case 'shipped':
+      return 'delivered';
+    default:
+      return null;
+  }
+}
+
 export default function AdminOrders() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -198,8 +225,13 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [trackingDrafts, setTrackingDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
-  // Debounce order-number search.
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearch(searchInput.trim());
@@ -209,7 +241,6 @@ export default function AdminOrders() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  // Fetch orders whenever filters or pagination change.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -272,10 +303,100 @@ export default function AdminOrders() {
     }
 
     void loadOrders();
-
     return () => controller.abort();
   }, [page, orderStatus, paymentStatus, search, reloadKey]);
+  
+  async function advanceOrder(
+    order: AdminOrder,
+    nextStatus: 'confirmed' | 'shipped' | 'delivered'
+  ) {
+    const trackingNumber = (
+      trackingDrafts[order._id] ??
+      order.trackingNumber ??
+      ''
+    ).trim();
 
+    if (nextStatus === 'shipped' && !trackingNumber) {
+      setActionError(
+        'Enter a tracking number before shipping this order.'
+      );
+      setActionSuccess('');
+      return;
+    }
+
+    const statusLabels = {
+      confirmed: 'confirm',
+      shipped: 'mark as shipped',
+      delivered: 'mark as delivered',
+    };
+
+    if (
+      !window.confirm(
+        `Are you sure you want to ${statusLabels[nextStatus]} order ${order.orderNumber}?`
+      )
+    ) {
+      return;
+    }
+
+    setUpdatingOrderId(order._id);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const payload =
+        nextStatus === 'shipped'
+          ? { orderStatus: nextStatus, trackingNumber }
+          : { orderStatus: nextStatus };
+
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(order._id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || 'Failed to update this order.'
+        );
+      }
+
+      setActionSuccess(
+        `Order ${order.orderNumber} was updated successfully.`
+      );
+
+      setOrders((current) =>
+        current.map((item) =>
+          item._id === order._id
+            ? {
+                ...item,
+                orderStatus: nextStatus,
+                ...(nextStatus === 'shipped'
+                  ? { trackingNumber }
+                  : {}),
+              }
+            : item
+        )
+      );
+
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update this order.'
+      );
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  }
+  
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
@@ -387,6 +508,24 @@ export default function AdminOrders() {
           </div>
         </div>
 
+        {actionError && (
+          <div
+            role="alert"
+            className="mb-5 border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {actionError}
+          </div>
+        )}
+
+        {actionSuccess && (
+          <div
+            role="status"
+            className="mb-5 border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+          >
+            {actionSuccess}
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div
@@ -435,7 +574,13 @@ export default function AdminOrders() {
           </div>
         ) : (
           <div className="space-y-4">
-            {orders.map((order) => (
+            {orders.map((order) => {
+              const nextStatus = getNextAdminStatus(order);
+              const trackingValue =
+                trackingDrafts[order._id] ?? order.trackingNumber ?? '';
+
+              return (
+
               <article
                 key={order._id}
                 className="overflow-hidden border border-gray-200 bg-white"
@@ -607,8 +752,80 @@ export default function AdminOrders() {
                     </p>
                   </div>
                 </div>
+                {/* Admin fulfilment controls */}
+                <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex-1">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        Fulfilment management
+                      </p>
+
+                      {nextStatus === 'shipped' && (
+                        <div className="max-w-sm">
+                          <label
+                            htmlFor={`tracking-${order._id}`}
+                            className="mb-1.5 block text-xs font-medium text-gray-600"
+                          >
+                            Shipment tracking number *
+                          </label>
+
+                          <input
+                            id={`tracking-${order._id}`}
+                            type="text"
+                            maxLength={120}
+                            value={trackingValue}
+                            onChange={(event) =>
+                              setTrackingDrafts((current) => ({
+                                ...current,
+                                [order._id]: event.target.value,
+                              }))
+                            }
+                            disabled={updatingOrderId !== null}
+                            placeholder="Enter tracking number"
+                            className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
+                          />
+                        </div>
+                      )}
+
+                      {!nextStatus && (
+                        <p className="text-xs text-gray-500">
+                          {order.orderStatus === 'cancelled' ||
+                          order.orderStatus === 'returned' ||
+                          order.orderStatus === 'delivered'
+                            ? 'No further fulfilment actions available.'
+                            : order.paymentStatus === 'failed' ||
+                                order.paymentStatus === 'refunded' ||
+                                order.refundStatus === 'pending' ||
+                                order.refundStatus === 'processed'
+                              ? 'Fulfilment is blocked by the current payment or refund status.'
+                              : 'Awaiting successful payment before fulfilment can proceed.'}
+                        </p>
+                      )}
+                    </div>
+
+                    {nextStatus && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void advanceOrder(order, nextStatus)
+                        }
+                        disabled={updatingOrderId !== null}
+                        className="inline-flex shrink-0 items-center justify-center gap-2 bg-[#e63329] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#c92b22] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {updatingOrderId === order._id
+                          ? 'Updating...'
+                          : nextStatus === 'confirmed'
+                            ? 'Confirm order'
+                            : nextStatus === 'shipped'
+                              ? 'Mark as shipped'
+                              : 'Mark as delivered'}
+                      </button>
+                    )}
+                  </div>
+                </div>                
               </article>
-            ))}
+            ); 
+          })}
           </div>
         )}
 
