@@ -1,13 +1,18 @@
+
 import { NextResponse } from 'next/server';
 
 import { getAdminUser } from '@/lib/adminAuth';
 import User from '@/models/User';
 import Artwork from '@/models/Artwork';
 import Order from '@/models/Order';
+import Blog from '@/models/Blog';
+
+const noStoreHeaders = {
+  'Cache-Control': 'no-store',
+};
 
 export async function GET() {
   try {
-    // Verify the current database role on every request.
     const admin = await getAdminUser();
 
     if (!admin) {
@@ -15,9 +20,7 @@ export async function GET() {
         { error: 'Admin access required' },
         {
           status: 403,
-          headers: {
-            'Cache-Control': 'no-store',
-          },
+          headers: noStoreHeaders,
         }
       );
     }
@@ -34,6 +37,10 @@ export async function GET() {
       newOrders,
       inProgressOrders,
       paidOrderValueResult,
+      totalBlogs,
+      publishedBlogs,
+      draftBlogs,
+      blogViewsResult,
     ] = await Promise.all([
       User.countDocuments(),
 
@@ -74,10 +81,32 @@ export async function GET() {
           },
         },
       ]),
+
+      Blog.countDocuments(),
+
+      Blog.countDocuments({ isPublished: true }),
+
+      Blog.countDocuments({ isPublished: { $ne: true } }),
+
+      Blog.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalViews: {
+              $sum: {
+                $ifNull: ['$views', 0],
+              },
+            },
+          },
+        },
+      ]),
     ]);
 
     const paidOrderValue =
       paidOrderValueResult[0]?.total ?? 0;
+
+    const totalBlogViews =
+      blogViewsResult[0]?.totalViews ?? 0;
 
     return NextResponse.json(
       {
@@ -86,20 +115,25 @@ export async function GET() {
           buyers,
           artists,
           admins,
+
           totalArtworks,
           availableArtworks,
           unavailableArtworks,
+
           totalOrders,
           newOrders,
           inProgressOrders,
           paidOrderValue,
+
+          totalBlogs,
+          publishedBlogs,
+          draftBlogs,
+          totalBlogViews,
         },
       },
       {
         status: 200,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
+        headers: noStoreHeaders,
       }
     );
   } catch (error) {
@@ -109,9 +143,7 @@ export async function GET() {
       { error: 'Failed to load admin overview' },
       {
         status: 500,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
+        headers: noStoreHeaders,
       }
     );
   }

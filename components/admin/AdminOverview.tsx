@@ -28,6 +28,10 @@ interface OverviewStats {
   newOrders: number;
   inProgressOrders: number;
   paidOrderValue: number;
+  totalBlogs: number;
+  publishedBlogs: number;
+  draftBlogs: number;
+  totalBlogViews: number;
 }
 
 interface OverviewResponse {
@@ -167,6 +171,30 @@ export default function AdminOverview({
           label: 'Paid order value',
           value: formatCurrency(stats.paidOrderValue),
           detail: 'Sum of orders marked paid',
+          icon: <Activity size={20} />,
+        },
+        {
+          label: 'Total blog posts',
+          value: formatNumber(stats.totalBlogs),
+          detail: 'All articles and drafts',
+          icon: <FileText size={20} />,
+        },
+        {
+          label: 'Published articles',
+          value: formatNumber(stats.publishedBlogs),
+          detail: 'Visible on the public blog',
+          icon: <CheckCircle2 size={20} />,
+        },
+        {
+          label: 'Blog drafts',
+          value: formatNumber(stats.draftBlogs),
+          detail: 'Unpublished articles',
+          icon: <FileText size={20} />,
+        },
+        {
+          label: 'Article views',
+          value: formatNumber(stats.totalBlogViews),
+          detail: 'Combined views across all articles',
           icon: <Activity size={20} />,
         },
       ]
