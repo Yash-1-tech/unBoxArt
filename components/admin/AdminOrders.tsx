@@ -15,6 +15,7 @@ import {
   MapPin,
   CreditCard,
   ImageIcon,
+  RotateCcw,
 } from 'lucide-react';
 
 interface OrderBuyer {
@@ -75,6 +76,8 @@ interface OrdersResponse {
   limit: number;
   totalPages: number;
 }
+
+type NextAdminStatus = 'confirmed' | 'shipped' | 'delivered';
 
 const ORDER_STATUS_STYLES: Record<string, string> = {
   placed: 'bg-blue-50 text-blue-700',
@@ -184,16 +187,16 @@ function PaymentStatus({ status }: { status: string }) {
   );
 }
 
+// Determine the next permitted fulfilment status.
 function getNextAdminStatus(
   order: AdminOrder
-): 'confirmed' | 'shipped' | 'delivered' | null {
+): NextAdminStatus | null {
   const paymentBlocked =
     (order.paymentMethod !== 'cod' &&
       order.paymentStatus !== 'paid') ||
     order.paymentStatus === 'failed' ||
     order.paymentStatus === 'refunded' ||
-    order.refundStatus === 'pending' ||
-    order.refundStatus === 'processed';
+    Boolean(order.refundStatus);
 
   if (paymentBlocked) {
     return null;
@@ -202,13 +205,33 @@ function getNextAdminStatus(
   switch (order.orderStatus) {
     case 'placed':
       return 'confirmed';
+
     case 'confirmed':
       return 'shipped';
+
     case 'shipped':
       return 'delivered';
+
     default:
       return null;
   }
+}
+
+// Only eligible, fully paid Razorpay orders can be refunded here.
+function canAdminRefundOrder(order: AdminOrder): boolean {
+  const eligibleStatus =
+    order.orderStatus === 'placed' ||
+    order.orderStatus === 'confirmed' ||
+    (order.orderStatus === 'cancelled' &&
+      order.refundStatus === 'failed');
+
+  return (
+    order.paymentMethod === 'razorpay' &&
+    order.paymentStatus === 'paid' &&
+    order.refundStatus !== 'pending' &&
+    order.refundStatus !== 'processed' &&
+    eligibleStatus
+  );
 }
 
 export default function AdminOrders() {
@@ -225,13 +248,23 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+
   const [trackingDrafts, setTrackingDrafts] = useState<
     Record<string, string>
   >({});
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(
+    null
+  );
+
+  const [refundingOrderId, setRefundingOrderId] = useState<string | null>(
+    null
+  );
+
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
+  // Debounce order-number search.
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setSearch(searchInput.trim());
@@ -241,6 +274,7 @@ export default function AdminOrders() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
+  // Fetch orders whenever filters or pagination change.
   useEffect(() => {
     const controller = new AbortController();
 
@@ -303,12 +337,14 @@ export default function AdminOrders() {
     }
 
     void loadOrders();
+
     return () => controller.abort();
   }, [page, orderStatus, paymentStatus, search, reloadKey]);
-  
+
+  // Advance an order through its permitted fulfilment stages.
   async function advanceOrder(
     order: AdminOrder,
-    nextStatus: 'confirmed' | 'shipped' | 'delivered'
+    nextStatus: NextAdminStatus
   ) {
     const trackingNumber = (
       trackingDrafts[order._id] ??
@@ -324,7 +360,7 @@ export default function AdminOrders() {
       return;
     }
 
-    const statusLabels = {
+    const statusLabels: Record<NextAdminStatus, string> = {
       confirmed: 'confirm',
       shipped: 'mark as shipped',
       delivered: 'mark as delivered',
@@ -345,8 +381,13 @@ export default function AdminOrders() {
     try {
       const payload =
         nextStatus === 'shipped'
-          ? { orderStatus: nextStatus, trackingNumber }
-          : { orderStatus: nextStatus };
+          ? {
+              orderStatus: nextStatus,
+              trackingNumber,
+            }
+          : {
+              orderStatus: nextStatus,
+            };
 
       const response = await fetch(
         `/api/admin/orders/${encodeURIComponent(order._id)}`,
@@ -367,10 +408,6 @@ export default function AdminOrders() {
         );
       }
 
-      setActionSuccess(
-        `Order ${order.orderNumber} was updated successfully.`
-      );
-
       setOrders((current) =>
         current.map((item) =>
           item._id === order._id
@@ -385,6 +422,18 @@ export default function AdminOrders() {
         )
       );
 
+      if (nextStatus === 'shipped') {
+        setTrackingDrafts((current) => {
+          const next = { ...current };
+          delete next[order._id];
+          return next;
+        });
+      }
+
+      setActionSuccess(
+        `Order ${order.orderNumber} was updated successfully.`
+      );
+
       setReloadKey((current) => current + 1);
     } catch (err) {
       setActionError(
@@ -396,10 +445,115 @@ export default function AdminOrders() {
       setUpdatingOrderId(null);
     }
   }
-  
+
+  // Initiate a full Razorpay refund.
+  async function requestFullRefund(order: AdminOrder) {
+    const confirmed = window.confirm(
+      `You are about to initiate a FULL refund of ${formatCurrency(
+        order.total
+      )} for order ${order.orderNumber}.\n\nThe order will be cancelled. Continue?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRefundingOrderId(order._id);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(order._id)}/refund`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            confirmFullRefund: true,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!data) {
+        throw new Error(
+          'Invalid response from the refund service.'
+        );
+      }
+
+      // The existing Razorpay helper may use HTTP 409 for
+      // refunds that have been initiated and are pending.
+      if (data.refundStatus === 'pending') {
+        setOrders((current) =>
+          current.map((item) =>
+            item._id === order._id
+              ? {
+                  ...item,
+                  orderStatus: 'cancelled',
+                  refundStatus: 'pending',
+                }
+              : item
+          )
+        );
+
+        setActionSuccess(
+          data.message ||
+            `Refund initiated for ${order.orderNumber}. Waiting for Razorpay confirmation.`
+        );
+
+        setReloadKey((current) => current + 1);
+        return;
+      }
+
+      if (data.refundStatus === 'processed') {
+        setOrders((current) =>
+          current.map((item) =>
+            item._id === order._id
+              ? {
+                  ...item,
+                  orderStatus: 'cancelled',
+                  paymentStatus: 'refunded',
+                  refundStatus: 'processed',
+                }
+              : item
+          )
+        );
+
+        setActionSuccess(
+          `Razorpay reports that the refund for ${order.orderNumber} has been processed.`
+        );
+
+        setReloadKey((current) => current + 1);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Failed to initiate the refund.'
+        );
+      }
+
+      throw new Error(
+        data.message || 'Unexpected refund response.'
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to initiate the refund.'
+      );
+    } finally {
+      setRefundingOrderId(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
+
         {/* Header */}
         <div className="mb-8">
           <Link
@@ -422,11 +576,11 @@ export default function AdminOrders() {
               </h1>
 
               <p className="mt-2 text-sm text-gray-500">
-                Review orders, buyers, payments, and fulfilment.
+                Review orders, buyers, payments, refunds, and fulfilment.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-gray-500">
                 {total.toLocaleString('en-IN')} order
                 {total !== 1 ? 's' : ''}
@@ -508,6 +662,7 @@ export default function AdminOrders() {
           </div>
         </div>
 
+        {/* Action feedback */}
         {actionError && (
           <div
             role="alert"
@@ -526,7 +681,7 @@ export default function AdminOrders() {
           </div>
         )}
 
-        {/* Error */}
+        {/* Fetch error */}
         {error && (
           <div
             role="alert"
@@ -565,9 +720,11 @@ export default function AdminOrders() {
               size={30}
               className="mx-auto mb-3 text-gray-300"
             />
+
             <p className="text-sm font-medium text-gray-700">
               No orders found
             </p>
+
             <p className="mt-1 text-xs text-gray-400">
               Try changing your search or filters.
             </p>
@@ -576,256 +733,344 @@ export default function AdminOrders() {
           <div className="space-y-4">
             {orders.map((order) => {
               const nextStatus = getNextAdminStatus(order);
+
               const trackingValue =
-                trackingDrafts[order._id] ?? order.trackingNumber ?? '';
+                trackingDrafts[order._id] ??
+                order.trackingNumber ??
+                '';
 
               return (
+                <article
+                  key={order._id}
+                  className="overflow-hidden border border-gray-200 bg-white"
+                >
+                  {/* Order header */}
+                  <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {order.orderNumber}
+                      </p>
 
-              <article
-                key={order._id}
-                className="overflow-hidden border border-gray-200 bg-white"
-              >
-                {/* Order header */}
-                <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {order.orderNumber}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {formatDate(order.createdAt)}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <OrderStatus status={order.orderStatus} />
-                    <PaymentStatus status={order.paymentStatus} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-5 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
-                  {/* Buyer */}
-                  <div>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      Buyer
-                    </p>
-
-                    <p className="text-sm font-semibold text-gray-800">
-                      {getBuyerName(order.buyer)}
-                    </p>
-
-                    <p className="mt-1 break-all text-xs text-gray-500">
-                      {getBuyerEmail(order.buyer)}
-                    </p>
-                  </div>
-
-                  {/* Location */}
-                  <div>
-                    <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      <MapPin size={12} />
-                      Delivery location
-                    </p>
-
-                    <p className="text-sm text-gray-700">
-                      {[
-                        order.shippingAddress?.city,
-                        order.shippingAddress?.state,
-                      ]
-                        .filter(Boolean)
-                        .join(', ') || '—'}
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      {order.shippingAddress?.country || ''}
-                    </p>
-                  </div>
-
-                  {/* Payment */}
-                  <div>
-                    <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      <CreditCard size={12} />
-                      Payment
-                    </p>
-
-                    <p className="text-sm font-medium capitalize text-gray-800">
-                      {order.paymentMethod.replace('_', ' ')}
-                    </p>
-
-                    {order.refundStatus && (
                       <p className="mt-1 text-xs text-gray-500">
-                        Refund: <span className="capitalize">{order.refundStatus}</span>
+                        {formatDate(order.createdAt)}
                       </p>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Total */}
-                  <div>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      Order total
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <OrderStatus status={order.orderStatus} />
+                      <PaymentStatus status={order.paymentStatus} />
 
-                    <p className="text-lg font-semibold text-gray-900">
-                      {formatCurrency(order.total)}
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      {order.items.length} item
-                      {order.items.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Order items */}
-                <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
-                  <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                    <Package size={13} />
-                    Order items
-                  </p>
-
-                  <div className="space-y-3">
-                    {order.items.map((item, index) => {
-                      const imageUrl = getArtworkImage(item.artwork);
-
-                      return (
-                        <div
-                          key={`${order._id}-${index}`}
-                          className="flex items-center gap-3"
-                        >
-                          <div className="h-12 w-12 shrink-0 overflow-hidden bg-gray-100">
-                            {imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={imageUrl}
-                                alt={getArtworkTitle(item.artwork)}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                <ImageIcon size={18} />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-800">
-                              {getArtworkTitle(item.artwork)}
-                            </p>
-
-                            <p className="mt-1 text-[11px] text-gray-500">
-                              {getArtworkCode(item.artwork)}
-                              {' · '}
-                              {item.type.replace('_', ' ')}
-                              {' · '}
-                              Qty {item.quantity}
-                            </p>
-                          </div>
-
-                          <p className="shrink-0 text-sm font-medium text-gray-800">
-                            {formatCurrency(item.price * item.quantity)}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Financial breakdown */}
-                <div className="flex flex-col gap-2 border-t border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
-                  <div className="space-y-1 text-xs text-gray-500">
-                    <p>Subtotal: {formatCurrency(order.subtotal)}</p>
-                    <p>Shipping: {formatCurrency(order.shippingCost)}</p>
-                    {order.discount > 0 && (
-                      <p>Discount: −{formatCurrency(order.discount)}</p>
-                    )}
-                    {order.trackingNumber && (
-                      <p>
-                        Tracking: <span className="font-medium text-gray-700">{order.trackingNumber}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="text-left sm:text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                      Total paid / due
-                    </p>
-                    <p className="mt-1 text-base font-semibold text-gray-900">
-                      {formatCurrency(order.total)}
-                    </p>
-                  </div>
-                </div>
-                {/* Admin fulfilment controls */}
-                <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="flex-1">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                        Fulfilment management
-                      </p>
-
-                      {nextStatus === 'shipped' && (
-                        <div className="max-w-sm">
-                          <label
-                            htmlFor={`tracking-${order._id}`}
-                            className="mb-1.5 block text-xs font-medium text-gray-600"
-                          >
-                            Shipment tracking number *
-                          </label>
-
-                          <input
-                            id={`tracking-${order._id}`}
-                            type="text"
-                            maxLength={120}
-                            value={trackingValue}
-                            onChange={(event) =>
-                              setTrackingDrafts((current) => ({
-                                ...current,
-                                [order._id]: event.target.value,
-                              }))
-                            }
-                            disabled={updatingOrderId !== null}
-                            placeholder="Enter tracking number"
-                            className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
-                          />
-                        </div>
+                      {order.refundStatus && (
+                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-gray-600">
+                          Refund: {order.refundStatus}
+                        </span>
                       )}
+                    </div>
+                  </div>
 
-                      {!nextStatus && (
-                        <p className="text-xs text-gray-500">
-                          {order.orderStatus === 'cancelled' ||
-                          order.orderStatus === 'returned' ||
-                          order.orderStatus === 'delivered'
-                            ? 'No further fulfilment actions available.'
-                            : order.paymentStatus === 'failed' ||
-                                order.paymentStatus === 'refunded' ||
-                                order.refundStatus === 'pending' ||
-                                order.refundStatus === 'processed'
-                              ? 'Fulfilment is blocked by the current payment or refund status.'
-                              : 'Awaiting successful payment before fulfilment can proceed.'}
+                  {/* Order summary */}
+                  <div className="grid grid-cols-1 gap-5 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
+
+                    {/* Buyer */}
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        Buyer
+                      </p>
+
+                      <p className="text-sm font-semibold text-gray-800">
+                        {getBuyerName(order.buyer)}
+                      </p>
+
+                      <p className="mt-1 break-all text-xs text-gray-500">
+                        {getBuyerEmail(order.buyer)}
+                      </p>
+                    </div>
+
+                    {/* Location */}
+                    <div>
+                      <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        <MapPin size={12} />
+                        Delivery location
+                      </p>
+
+                      <p className="text-sm text-gray-700">
+                        {[
+                          order.shippingAddress?.city,
+                          order.shippingAddress?.state,
+                        ]
+                          .filter(Boolean)
+                          .join(', ') || '—'}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {order.shippingAddress?.country || ''}
+                      </p>
+                    </div>
+
+                    {/* Payment */}
+                    <div>
+                      <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        <CreditCard size={12} />
+                        Payment
+                      </p>
+
+                      <p className="text-sm font-medium capitalize text-gray-800">
+                        {String(order.paymentMethod || '').replace('_', ' ')}
+                      </p>
+
+                      {order.refundStatus && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Refund:{' '}
+                          <span className="font-medium capitalize">
+                            {order.refundStatus}
+                          </span>
                         </p>
                       )}
                     </div>
 
-                    {nextStatus && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void advanceOrder(order, nextStatus)
-                        }
-                        disabled={updatingOrderId !== null}
-                        className="inline-flex shrink-0 items-center justify-center gap-2 bg-[#e63329] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#c92b22] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {updatingOrderId === order._id
-                          ? 'Updating...'
-                          : nextStatus === 'confirmed'
-                            ? 'Confirm order'
-                            : nextStatus === 'shipped'
-                              ? 'Mark as shipped'
-                              : 'Mark as delivered'}
-                      </button>
-                    )}
+                    {/* Total */}
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        Order total
+                      </p>
+
+                      <p className="text-lg font-semibold text-gray-900">
+                        {formatCurrency(order.total)}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {order.items.length} item
+                        {order.items.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
                   </div>
-                </div>                
-              </article>
-            ); 
-          })}
+
+                  {/* Order items */}
+                  <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+                    <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                      <Package size={13} />
+                      Order items
+                    </p>
+
+                    <div className="space-y-3">
+                      {order.items.map((item, index) => {
+                        const imageUrl = getArtworkImage(item.artwork);
+
+                        return (
+                          <div
+                            key={`${order._id}-${index}`}
+                            className="flex items-center gap-3"
+                          >
+                            <div className="h-12 w-12 shrink-0 overflow-hidden bg-gray-100">
+                              {imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={imageUrl}
+                                  alt={getArtworkTitle(item.artwork)}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                  <ImageIcon size={18} />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-gray-800">
+                                {getArtworkTitle(item.artwork)}
+                              </p>
+
+                              <p className="mt-1 text-[11px] text-gray-500">
+                                {getArtworkCode(item.artwork)}
+                                {' · '}
+                                {item.type.replace('_', ' ')}
+                                {' · '}
+                                Qty {item.quantity}
+                              </p>
+
+                              {item.type === 'digital_print' && (
+                                <p className="mt-1 text-[10px] text-gray-400">
+                                  {item.printMedium || ''}
+                                  {item.printSize
+                                    ? ` · ${item.printSize}`
+                                    : ''}
+                                </p>
+                              )}
+                            </div>
+
+                            <p className="shrink-0 text-sm font-medium text-gray-800">
+                              {formatCurrency(item.price * item.quantity)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Financial breakdown */}
+                  <div className="flex flex-col gap-2 border-t border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+                    <div className="space-y-1 text-xs text-gray-500">
+                      <p>
+                        Subtotal: {formatCurrency(order.subtotal)}
+                      </p>
+
+                      <p>
+                        Shipping: {formatCurrency(order.shippingCost)}
+                      </p>
+
+                      {order.discount > 0 && (
+                        <p>
+                          Discount: −{formatCurrency(order.discount)}
+                        </p>
+                      )}
+
+                      {order.trackingNumber && (
+                        <p>
+                          Tracking:{' '}
+                          <span className="font-medium text-gray-700">
+                            {order.trackingNumber}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-left sm:text-right">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        Order total
+                      </p>
+
+                      <p className="mt-1 text-base font-semibold text-gray-900">
+                        {formatCurrency(order.total)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Admin fulfilment controls */}
+                  <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div className="flex-1">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                          Fulfilment management
+                        </p>
+
+                        {nextStatus === 'shipped' && (
+                          <div className="max-w-sm">
+                            <label
+                              htmlFor={`tracking-${order._id}`}
+                              className="mb-1.5 block text-xs font-medium text-gray-600"
+                            >
+                              Shipment tracking number *
+                            </label>
+
+                            <input
+                              id={`tracking-${order._id}`}
+                              type="text"
+                              maxLength={120}
+                              value={trackingValue}
+                              onChange={(event) =>
+                                setTrackingDrafts((current) => ({
+                                  ...current,
+                                  [order._id]: event.target.value,
+                                }))
+                              }
+                              disabled={
+                                updatingOrderId !== null ||
+                                refundingOrderId !== null
+                              }
+                              placeholder="Enter tracking number"
+                              className="w-full border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#e63329] disabled:bg-gray-50"
+                            />
+                          </div>
+                        )}
+
+                        {!nextStatus && (
+                          <p className="text-xs text-gray-500">
+                            {order.orderStatus === 'cancelled' ||
+                            order.orderStatus === 'returned' ||
+                            order.orderStatus === 'delivered'
+                              ? 'No further fulfilment actions available.'
+                              : order.paymentStatus === 'failed' ||
+                                  order.paymentStatus === 'refunded' ||
+                                  Boolean(order.refundStatus)
+                                ? 'Fulfilment is blocked by the current payment or refund status.'
+                                : 'Awaiting successful payment before fulfilment can proceed.'}
+                          </p>
+                        )}
+                      </div>
+
+                      {nextStatus && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void advanceOrder(order, nextStatus)
+                          }
+                          disabled={
+                            updatingOrderId !== null ||
+                            refundingOrderId !== null
+                          }
+                          className="inline-flex shrink-0 items-center justify-center gap-2 bg-[#e63329] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#c92b22] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingOrderId === order._id
+                            ? 'Updating...'
+                            : nextStatus === 'confirmed'
+                              ? 'Confirm order'
+                              : nextStatus === 'shipped'
+                                ? 'Mark as shipped'
+                                : 'Mark as delivered'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Admin full refund controls */}
+                  {canAdminRefundOrder(order) && (
+                    <div className="border-t border-gray-100 px-4 py-4 sm:px-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-800">
+                            Full refund
+                          </p>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            Initiate a full Razorpay refund of{' '}
+                            {formatCurrency(order.total)}.
+                            The order will be cancelled.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void requestFullRefund(order)
+                          }
+                          disabled={
+                            refundingOrderId !== null ||
+                            updatingOrderId !== null
+                          }
+                          className="inline-flex shrink-0 items-center justify-center gap-2 border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <RotateCcw
+                            size={15}
+                            className={
+                              refundingOrderId === order._id
+                                ? 'animate-spin'
+                                : ''
+                            }
+                          />
+
+                          {refundingOrderId === order._id
+                            ? 'Processing...'
+                            : order.refundStatus === 'failed'
+                              ? 'Retry full refund'
+                              : 'Initiate full refund'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
 
@@ -864,7 +1109,11 @@ export default function AdminOrders() {
                   Math.min(Math.max(totalPages, 1), current + 1)
                 )
               }
-              disabled={page >= totalPages || loading || totalPages === 0}
+              disabled={
+                page >= totalPages ||
+                loading ||
+                totalPages === 0
+              }
               className="inline-flex items-center gap-1 border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
